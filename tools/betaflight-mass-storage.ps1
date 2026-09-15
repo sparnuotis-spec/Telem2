@@ -3,7 +3,7 @@ param(
     [string]$Port,
     [int]$PollSeconds = 1,
     [string]$Telem2Url = 'http://localhost:5050',
-    [string]$OperatorName = $env:USERNAME,
+    [string]$OperatorName = '',
     [switch]$Once,
     [switch]$VerboseLog
 )

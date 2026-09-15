@@ -69,7 +69,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\tools\betaflight-mass-storage.ps1
 ```
 
-The watcher reports the Windows username by default. To show the operator’s real name, pass `-OperatorName`:
+The watcher uses the name entered by the user in the Telem2 browser app. It no longer uses the Windows PC username by default. To override the app name explicitly, pass `-OperatorName`:
 
 ```powershell
 .\tools\betaflight-mass-storage.ps1 -OperatorName "Markas" -Telem2Url http://192.168.1.25:5050
