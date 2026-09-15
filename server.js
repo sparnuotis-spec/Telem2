@@ -246,6 +246,11 @@ app.delete('/api/flights/:id', (req, res) => {
   db.prepare('DELETE FROM files WHERE flight_id=?').run(flight.flight_id); db.prepare('DELETE FROM events WHERE flight_id=?').run(flight.flight_id); db.prepare('DELETE FROM flights WHERE id=?').run(id);
   fs.rmSync(path.join(UPLOAD_DIR, flight.flight_id), { recursive: true, force: true }); broadcast(); res.json({ ok: true });
 });
+app.post('/api/sd-transfer/:pilot/confirm', (req, res) => {
+  const pilotId=req.params.pilot; const sessionId=Number(req.body?.session_id||0); const flights=db.prepare("SELECT * FROM flights WHERE session_id=? AND pilot_id=? AND status='completed' AND result='needs_sd_transfer' AND sd_transfer_ack=0 ORDER BY mode, rep").all(sessionId,pilotId); if(flights.length!==4)return res.status(400).json({error:'Exactly four completed SD-card flights are required.'});
+  for(const f of flights){const kinds=db.prepare('SELECT DISTINCT kind FROM files WHERE flight_id=?').all(f.flight_id).map(x=>x.kind);if(!kinds.includes('telemetry')||!kinds.includes('goggles'))return res.status(400).json({error:'Upload all eight files before confirming.'});}
+  const assigned=[];const tx=db.transaction(()=>{for(const f of flights){const id=nextFlightId(),oldRoot=path.join(UPLOAD_DIR,f.flight_id),newRoot=path.join(UPLOAD_DIR,id);if(fs.existsSync(oldRoot))fs.renameSync(oldRoot,newRoot);db.prepare('UPDATE files SET flight_id=?,stored_path=REPLACE(stored_path,?,?) WHERE flight_id=?').run(id,f.flight_id,id,f.flight_id);db.prepare('UPDATE flights SET flight_id=?,sd_transfer_ack=1,updated_at=? WHERE id=?').run(id,now(),f.id);db.prepare('UPDATE events SET flight_id=? WHERE flight_id=?').run(id,f.flight_id);assigned.push(id);}});tx();broadcast();res.json({ok:true,flight_ids:assigned});
+});
 app.post('/api/flights/:id/files', upload.array('files', 10), (req, res) => {
   const flight = db.prepare('SELECT * FROM flights WHERE id=?').get(req.params.id); if (!flight) return res.status(404).json({ error: 'Flight not found.' });
   const pilot=db.prepare('SELECT tag FROM pilots WHERE pilot_id=?').get(flight.pilot_id); const completedCount=db.prepare("SELECT COUNT(*) AS n FROM flights WHERE session_id=? AND pilot_id=? AND status='completed' AND result IN ('success','needs_sd_transfer')").get(flight.session_id,flight.pilot_id).n; if (pilot?.tag === 'sd card' && completedCount < 4) return res.status(400).json({ error: 'SD-card files unlock after this pilot completes four flights.' });
@@ -259,7 +264,7 @@ app.post('/api/flights/:id/files', upload.array('files', 10), (req, res) => {
     const r = db.prepare('INSERT INTO files(flight_id,kind,original_name,stored_path,size,sha256,created_at) VALUES (?,?,?,?,?,?,?)').run(flight.flight_id, kind, file.originalname, finalPath, file.size, hash, now()); saved.push({ id: r.lastInsertRowid, original_name: file.originalname, size: file.size, sha256: hash });
   }
   let assignedFlightId = flight.flight_id; let assignedFlightDbId = flight.id; const kinds = db.prepare('SELECT DISTINCT kind FROM files WHERE flight_id=?').all(flight.flight_id).map(x => x.kind);
-  if (flight.flight_id.startsWith('PENDING-') && kinds.includes('telemetry') && kinds.includes('goggles')) {
+  if (flight.flight_id.startsWith('PENDING-') && kinds.includes('telemetry') && kinds.includes('goggles') && req.body.sd_batch !== '1') {
     assignedFlightId = nextFlightId(); const oldRoot = path.join(UPLOAD_DIR, flight.flight_id); const newRoot = path.join(UPLOAD_DIR, assignedFlightId);
     const migrate = db.transaction(() => {
       const result = db.prepare(`INSERT INTO flights(flight_id,session_id,round_id,scenario_id,pilot_id,uav_id,battery_id,fl,mode,weather,rep,status,result,notes,operator,claimed_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(assignedFlightId, flight.session_id, flight.round_id, flight.scenario_id, flight.pilot_id, flight.uav_id, flight.battery_id, flight.fl, flight.mode, flight.weather, flight.rep, flight.status, flight.result, flight.notes, flight.operator, flight.claimed_by, flight.created_at, now());
