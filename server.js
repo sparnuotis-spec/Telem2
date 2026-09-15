@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS events (
 );
 `);
 try { db.exec('ALTER TABLE flights ADD COLUMN sd_transfer_ack INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
+db.prepare("UPDATE flights SET status='completed', result='needs_sd_transfer' WHERE result='sd_transfer_complete'").run();
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
