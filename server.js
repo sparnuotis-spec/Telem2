@@ -219,6 +219,7 @@ app.post('/api/flights', (req, res) => {
 app.patch('/api/flights/:id', (req, res) => {
   const allowed = ['pilot_id','uav_id','battery_id','fl','mode','weather','rep','status','result','notes','operator','claimed_by','round_id','scenario_id'];
   const body = req.body || {}; const flight = db.prepare('SELECT * FROM flights WHERE id=?').get(req.params.id); if (!flight) return res.status(404).json({ error: 'Flight not found.' });
+  if ((body.status === 'completed' || body.result === 'success')) { const kinds = db.prepare('SELECT DISTINCT kind FROM files WHERE flight_id=?').all(flight.flight_id).map(x => x.kind); if (!kinds.includes('telemetry') || !kinds.includes('goggles')) return res.status(400).json({ error: 'Upload both telemetry and goggles video before marking success.' }); }
   const updates = []; const values = []; for (const key of allowed) if (body[key] !== undefined) { updates.push(`${key}=?`); values.push(key === 'mode' ? normalizeMode(body[key]) : key === 'weather' ? normalizeWeather(body[key]) : body[key]); }
   if (!updates.length) return res.json({ ok: true }); updates.push('updated_at=?'); values.push(now(), req.params.id);
   db.prepare(`UPDATE flights SET ${updates.join(',')} WHERE id=?`).run(...values); emitEvent(flight.flight_id, 'flight_updated', JSON.stringify(body)); res.json({ ok: true });
