@@ -203,9 +203,10 @@ app.post('/api/rounds', (req, res) => {
   const result = db.prepare('INSERT INTO rounds(session_id,name,w_group,position,status) VALUES (?,?,?,?,?)').run(session.id, body.name || 'Round', normalizeWeather(body.w_group), Number(body.position || 0), 'planned'); broadcast(); res.json({ id: result.lastInsertRowid });
 });
 app.post('/api/scenarios', (req, res) => {
-  const body = req.body || {}; if (!body.round_id || !body.name) return res.status(400).json({ error: 'Round and scenario are required.' });
-  const codes = {'Linijinis skrydis A–B–A':'SC-01','Kvadratas':'SC-02','Ovalas':'SC-03','Freestyle / trys laiptai':'SC-04','Slalomas':'SC-05','Aštuoniukė':'SC-06'}; const code = body.code || codes[body.name] || 'SC-CUSTOM';
-  const result = db.prepare('INSERT INTO scenarios(round_id,code,name,mode,position) VALUES (?,?,?,?,?)').run(body.round_id, code, body.name, 'CALM', Number(body.position || 0)); broadcast(); res.json({ id: result.lastInsertRowid });
+  const body = req.body || {}; if (!body.name) return res.status(400).json({ error: 'Scenario is required.' });
+  let roundId = body.round_id; if (!roundId && body.session_id) { const existing = db.prepare('SELECT id FROM rounds WHERE session_id=? ORDER BY id LIMIT 1').get(body.session_id); if (existing) roundId = existing.id; else { const created = db.prepare(`INSERT INTO rounds(session_id,name,w_group,position,status) VALUES (?,?,?,?,?)`).run(body.session_id, 'Default', 'W1', 0, 'planned'); roundId = created.lastInsertRowid; } }
+  if (!roundId) return res.status(400).json({ error: 'Select a session first.' }); const codes = {'Linijinis skrydis A–B–A':'SC-01','Kvadratas':'SC-02','Ovalas':'SC-03','Freestyle / trys laiptai':'SC-04','Slalomas':'SC-05','Aštuoniukė':'SC-06'}; const code = body.code || codes[body.name] || 'SC-CUSTOM';
+  const result = db.prepare('INSERT INTO scenarios(round_id,code,name,mode,position) VALUES (?,?,?,?,?)').run(roundId, code, body.name, 'CALM', Number(body.position || 0)); broadcast(); res.json({ id: result.lastInsertRowid });
 });
 app.post('/api/flights', (req, res) => {
   const body = req.body || {}; const session = body.session_id ? db.prepare('SELECT id FROM sessions WHERE id=?').get(body.session_id) : db.prepare("SELECT id FROM sessions WHERE status='active' ORDER BY id DESC LIMIT 1").get(); if (!session) return res.status(400).json({ error: 'Create or select a session first.' });
