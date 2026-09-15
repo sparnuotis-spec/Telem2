@@ -4,6 +4,7 @@ const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const os = require('os');
 const { execFile } = require('child_process');
 
 const PORT = Number(process.env.PORT || 5050);
@@ -130,6 +131,7 @@ const upload = multer({
   dest: UPLOAD_DIR,
   limits: { fileSize: Number(process.env.MAX_UPLOAD_BYTES || 5 * 1024 * 1024 * 1024) }
 });
+const lanAddress = () => { for (const list of Object.values(os.networkInterfaces())) for (const item of (list||[])) if (item.family==='IPv4' && !item.internal && !item.address.startsWith('169.254.')) return `http://${item.address}:${PORT}`; return `http://localhost:${PORT}`; };
 const now = () => new Date().toISOString();
 const broadcast = () => clients.forEach(res => { try { res.write(`data: ${JSON.stringify({ type: 'refresh', at: now() })}\n\n`); } catch (_) {} });
 const clients = new Set();
@@ -179,7 +181,7 @@ app.get('/api/state', (req, res) => {
   const events = session ? db.prepare(`SELECT e.*,COALESCE(e.session_id,f.session_id) AS event_session_id,COALESCE(e.flight_id,'') AS event_flight_id FROM events e LEFT JOIN flights f ON f.flight_id=e.flight_id WHERE e.session_id=? OR f.session_id=? ORDER BY e.id DESC LIMIT 500`).all(session.id,session.id) : [];
   const participants = session ? db.prepare('SELECT pilot_id FROM session_participants WHERE session_id=? ORDER BY pilot_id').all(session.id).map(x=>x.pilot_id) : [];
   for (const [key,value] of transferPresence) if (Date.now()-value.updated_at>30000) transferPresence.delete(key); for (const [key,value] of connectedUsers) if (Date.now()-value.updated_at>15000) connectedUsers.delete(key);
-  res.json({ session, sessions, participants, pilots, uavs, rounds, scenarios, flights: flights.map(f => ({ ...f, display_name: flightName(f) })), files, events, transfer_presence:Object.fromEntries(transferPresence), connected_users:[...connectedUsers.values()] });
+  res.json({ session, sessions, participants, pilots, uavs, rounds, scenarios, flights: flights.map(f => ({ ...f, display_name: flightName(f) })), files, events, transfer_presence:Object.fromEntries(transferPresence), connected_users:[...connectedUsers.values()], lan_url:lanAddress() });
 });
 
 app.post('/api/session', (req, res) => {
