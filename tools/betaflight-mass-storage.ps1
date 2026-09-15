@@ -48,6 +48,9 @@ function Send-MassStorageCommand([string]$TargetPort) {
         Write-Log "Verified Betaflight on $TargetPort and sent '#', 'version', then 'msc'."
         Report-Status 'mass_storage' $TargetPort 'Flight controller rebooted into mass-storage mode'
         $script:massStoragePort = $TargetPort
+        Start-Sleep -Seconds 2
+        $script:massStorageVolumes = @(Get-Volume | Where-Object { $_.DriveType -eq 'Removable' -and $_.DriveLetter } | ForEach-Object { [string]$_.DriveLetter })
+        $script:monitorMassStorage = $true
         Write-Log 'The FC should now appear as a USB mass-storage drive. Power-cycle it after transfer.'
     }
     finally {
@@ -64,12 +67,26 @@ if ($Port) {
 
 $known = @(Get-SerialPorts)
 $massStoragePort = ''
+$massStorageVolumes = @()
+$monitorMassStorage = $false
 Write-Log "Watching for a newly connected Betaflight USB serial port. Press Ctrl+C to stop."
 if ($known.Count) { Write-Log "Currently present: $($known -join ', ')" }
 
 while ($true) {
     Start-Sleep -Seconds ([Math]::Max(1,$PollSeconds))
     $current = @(Get-SerialPorts)
+    if ($monitorMassStorage) {
+        $currentVolumes = @(Get-Volume | Where-Object { $_.DriveType -eq 'Removable' -and $_.DriveLetter } | ForEach-Object { [string]$_.DriveLetter })
+        $removedVolumes = @($massStorageVolumes | Where-Object { $currentVolumes -notcontains $_ })
+        if ($massStorageVolumes.Count -gt 0 -and $removedVolumes.Count -gt 0) {
+            Report-Status 'disconnected' $massStoragePort 'Mass-storage drive disconnected'
+            $massStorageVolumes = @()
+            $massStoragePort = ''
+            $monitorMassStorage = $false
+        } elseif ($massStorageVolumes.Count -eq 0 -and $currentVolumes.Count -gt 0) {
+            $massStorageVolumes = $currentVolumes
+        }
+    }
     $removedPorts = @($known | Where-Object { $current -notcontains $_ })
     foreach ($removedPort in $removedPorts) { if ($removedPort -ne $massStoragePort) { Report-Status 'disconnected' $removedPort 'Flight controller disconnected' } }
     $newPorts = @($current | Where-Object { $known -notcontains $_ })
