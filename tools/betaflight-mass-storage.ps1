@@ -68,7 +68,7 @@ while ($true) {
             Send-MassStorageCommand $newPort
         }
         catch {
-            Write-Warning "$logPrefix Could not send the command to $newPort: $($_.Exception.Message)"
+            Write-Warning "$logPrefix Could not send the command to ${newPort}: $($_.Exception.Message)"
         }
         if ($Once) { exit 0 }
     }
