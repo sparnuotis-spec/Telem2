@@ -235,9 +235,16 @@ app.post('/api/flights/:id/files', upload.array('files', 10), (req, res) => {
     const hash = crypto.createHash('sha256').update(fs.readFileSync(finalPath)).digest('hex');
     const r = db.prepare('INSERT INTO files(flight_id,kind,original_name,stored_path,size,sha256,created_at) VALUES (?,?,?,?,?,?,?)').run(flight.flight_id, kind, file.originalname, finalPath, file.size, hash, now()); saved.push({ id: r.lastInsertRowid, original_name: file.originalname, size: file.size, sha256: hash });
   }
-  let assignedFlightId = flight.flight_id; const kinds = db.prepare('SELECT DISTINCT kind FROM files WHERE flight_id=?').all(flight.flight_id).map(x => x.kind);
-  if (flight.flight_id.startsWith('PENDING-') && kinds.includes('telemetry') && kinds.includes('goggles')) { assignedFlightId = nextFlightId(); const oldRoot = path.join(UPLOAD_DIR, flight.flight_id); const newRoot = path.join(UPLOAD_DIR, assignedFlightId); db.prepare('UPDATE flights SET flight_id=?,updated_at=? WHERE id=?').run(assignedFlightId, now(), flight.id); db.prepare('UPDATE files SET flight_id=?,stored_path=replace(stored_path,?,?) WHERE flight_id=?').run(assignedFlightId, oldRoot, newRoot, flight.flight_id); if (fs.existsSync(oldRoot)) fs.renameSync(oldRoot, newRoot); }
-  emitEvent(assignedFlightId, 'files_uploaded', `${saved.length} ${kind} file(s)`); res.json({ files: saved, flight_id: assignedFlightId, assigned: assignedFlightId !== flight.flight_id });
+  let assignedFlightId = flight.flight_id; let assignedFlightDbId = flight.id; const kinds = db.prepare('SELECT DISTINCT kind FROM files WHERE flight_id=?').all(flight.flight_id).map(x => x.kind);
+  if (flight.flight_id.startsWith('PENDING-') && kinds.includes('telemetry') && kinds.includes('goggles')) {
+    assignedFlightId = nextFlightId(); const oldRoot = path.join(UPLOAD_DIR, flight.flight_id); const newRoot = path.join(UPLOAD_DIR, assignedFlightId);
+    const migrate = db.transaction(() => {
+      const result = db.prepare(`INSERT INTO flights(flight_id,session_id,round_id,scenario_id,pilot_id,uav_id,battery_id,fl,mode,weather,rep,status,result,notes,operator,claimed_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(assignedFlightId, flight.session_id, flight.round_id, flight.scenario_id, flight.pilot_id, flight.uav_id, flight.battery_id, flight.fl, flight.mode, flight.weather, flight.rep, flight.status, flight.result, flight.notes, flight.operator, flight.claimed_by, flight.created_at, now());
+      assignedFlightDbId = result.lastInsertRowid; db.prepare('UPDATE files SET flight_id=?,stored_path=replace(stored_path,?,?) WHERE flight_id=?').run(assignedFlightId, oldRoot, newRoot, flight.flight_id); db.prepare('UPDATE events SET flight_id=? WHERE flight_id=?').run(assignedFlightId, flight.flight_id); db.prepare('DELETE FROM flights WHERE id=?').run(flight.id);
+    });
+    migrate(); if (fs.existsSync(oldRoot)) fs.renameSync(oldRoot, newRoot);
+  }
+  emitEvent(assignedFlightId, 'files_uploaded', `${saved.length} ${kind} file(s)`); res.json({ files: saved, flight_id: assignedFlightId, flight_db_id: assignedFlightDbId, assigned: assignedFlightId !== flight.flight_id });
 });
 app.get('/api/files/:id', (req, res) => { const f = db.prepare('SELECT * FROM files WHERE id=?').get(req.params.id); if (!f || !fs.existsSync(f.stored_path)) return res.status(404).end(); res.download(f.stored_path, f.original_name); });
 
