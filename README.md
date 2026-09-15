@@ -75,6 +75,14 @@ For a safer one-device/manual test, specify the COM port:
 .\tools\betaflight-mass-storage.ps1 -Port COM4
 ```
 
+For normal use, start the watcher once and leave its PowerShell window open. It will keep watching for newly connected flight controllers; you do not need to paste the command for every drone. You can also double-click:
+
+```text
+tools\start-betaflight-watcher.cmd
+```
+
+To start it automatically when Windows logs in, create a shortcut to `start-betaflight-watcher.cmd`, press `Win+R`, enter `shell:startup`, and place the shortcut in that Startup folder. Keep the host computer awake and leave the watcher running during the transfer session.
+
 The Betaflight command used for mass-storage mode is:
 
 ```text
