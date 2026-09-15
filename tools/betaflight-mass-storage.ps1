@@ -17,15 +17,16 @@ $ErrorActionPreference = 'Stop'
 $logPrefix = '[Telem2 Betaflight MSC]'
 function Write-Log([string]$Message) { Write-Host "$logPrefix $Message" }
 
-function Report-Status([string]$Status,[string]$TargetPort,[string]$Message) { try { Invoke-RestMethod -Uri ($Telem2Url.TrimEnd('/') + '/api/drone-status') -Method Post -ContentType 'application/json' -Body (@{state=$Status;port=$TargetPort;computer=$env:COMPUTERNAME;operator=$OperatorName;message=$Message}|ConvertTo-Json -Compress) | Out-Null } catch { Write-Warning "$logPrefix Could not report status to ${Telem2Url}: $($_.Exception.Message)" } }
+function Report-Status([string]$Status,[string]$TargetPort,[string]$Message,[string]$ConnectionId) { try { Invoke-RestMethod -Uri ($Telem2Url.TrimEnd('/') + '/api/drone-status') -Method Post -ContentType 'application/json' -Body (@{state=$Status;port=$TargetPort;computer=$env:COMPUTERNAME;operator=$OperatorName;connection_id=$ConnectionId;message=$Message}|ConvertTo-Json -Compress) | Out-Null } catch { Write-Warning "$logPrefix Could not report status to ${Telem2Url}: $($_.Exception.Message)" } }
 function Get-SerialPorts {
     [System.IO.Ports.SerialPort]::GetPortNames() | Sort-Object
 }
 
 function Send-MassStorageCommand([string]$TargetPort) {
+    $connectionId = [guid]::NewGuid().ToString()
     $beforeVolumes = @(Get-Volume | Where-Object { $_.DriveType -eq 'Removable' -and $_.DriveLetter } | ForEach-Object { [string]$_.DriveLetter })
     Write-Log "Opening $TargetPort at 115200 baud."
-    Report-Status 'connecting' $TargetPort 'Checking Betaflight firmware'
+    Report-Status 'connecting' $TargetPort 'Checking Betaflight firmware' $connectionId
     $serial = New-Object System.IO.Ports.SerialPort $TargetPort,115200,None,8,one
     $serial.ReadTimeout = 1000
     $serial.WriteTimeout = 1000
@@ -45,10 +46,10 @@ function Send-MassStorageCommand([string]$TargetPort) {
             throw "The device on $TargetPort did not identify itself as Betaflight; no msc command was sent."
         }
         $serial.Write("msc`r`n")
-        Report-Status 'verified' $TargetPort 'Betaflight verified; switching to mass storage'
+        Report-Status 'verified' $TargetPort 'Betaflight verified; switching to mass storage' $connectionId
         Write-Log "Verified Betaflight on $TargetPort and sent '#', 'version', then 'msc'."
-        Report-Status 'mass_storage' $TargetPort 'Flight controller rebooted into mass-storage mode'
-        if ($massStorageDevices) { $massStorageBaselines[$TargetPort] = $beforeVolumes; $massStorageDevices[$TargetPort] = @() }
+        Report-Status 'mass_storage' $TargetPort 'Flight controller rebooted into mass-storage mode' $connectionId
+        if ($massStorageDevices) { $massStorageBaselines[$TargetPort] = $beforeVolumes; $massStorageDevices[$TargetPort] = @(); $massStorageConnectionIds[$TargetPort] = $connectionId }
         Write-Log 'The FC should now appear as a USB mass-storage drive. Power-cycle it after transfer.'
     }
     finally {
@@ -65,6 +66,7 @@ if ($Port) {
 $known = @(Get-SerialPorts)
 $massStorageDevices = @{}
 $massStorageBaselines = @{}
+$massStorageConnectionIds = @{}
 Write-Log "Reporting drone status to $Telem2Url"
 Write-Log "Watching for a newly connected Betaflight USB serial port. Press Ctrl+C to stop."
 if ($known.Count) { Write-Log "Currently present: $($known -join ', ')" }
@@ -86,10 +88,11 @@ while ($true) {
         }
         $removedVolumes = @($knownVolumes | Where-Object { $currentVolumes -notcontains $_ })
         if ($removedVolumes.Count -gt 0) {
-            Report-Status 'disconnected' $devicePort 'Mass-storage drive disconnected'
+            Report-Status 'disconnected' $devicePort 'Mass-storage drive disconnected' $massStorageConnectionIds[$devicePort]
             Write-Log "Mass-storage drive disconnected for $devicePort."
             $massStorageDevices.Remove($devicePort)
             $massStorageBaselines.Remove($devicePort)
+            $massStorageConnectionIds.Remove($devicePort)
         }
     }
     $newPorts = @($current | Where-Object { $known -notcontains $_ })
