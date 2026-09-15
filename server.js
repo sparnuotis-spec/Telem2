@@ -6,6 +6,7 @@ const path = require('path');
 const crypto = require('crypto');
 const os = require('os');
 const { execFile } = require('child_process');
+const QRCode = require('qrcode');
 
 const PORT = Number(process.env.PORT || 5050);
 const ROOT = __dirname;
@@ -157,6 +158,7 @@ const autoRepeat = (sessionId, pilotId, scenarioId, mode, weather) => {
 };
 const flightName = f => [f.flight_id, f.pilot_id, f.uav_id, f.battery_id, f.scenario_code, f.mode, f.weather, f.rep].filter(Boolean).join('__');
 
+app.get('/api/qr.png', async (_, res) => { try { const png=await QRCode.toBuffer(lanAddress(), { errorCorrectionLevel:'M', margin:2, width:260, color:{dark:'#171d3b',light:'#ffffff'} }); res.type('png').send(png); } catch (err) { res.status(500).json({error:err.message}); } });
 app.get('/api/health', (_, res) => res.json({ ok: true, port: PORT, time: now() }));
 app.get('/api/events', (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
