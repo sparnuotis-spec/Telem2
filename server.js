@@ -211,9 +211,9 @@ app.post('/api/flights', (req, res) => {
   const body = req.body || {}; const session = body.session_id ? db.prepare('SELECT id FROM sessions WHERE id=?').get(body.session_id) : db.prepare("SELECT id FROM sessions WHERE status='active' ORDER BY id DESC LIMIT 1").get(); if (!session) return res.status(400).json({ error: 'Create or select a session first.' });
   if (!body.pilot_id || !body.scenario_id) return res.status(400).json({ error: 'Pilot and scenario are required.' });
   const scenario = db.prepare('SELECT s.*, r.w_group FROM scenarios s JOIN rounds r ON r.id=s.round_id WHERE s.id=?').get(body.scenario_id); if (!scenario) return res.status(400).json({ error: 'Scenario not found.' });
-  const mode = scenario.mode || 'CALM'; const weather = normalizeWeather(scenario.w_group); const uavId = `UAV-${String(body.pilot_id).replace(/^PILOT-/, '')}`; const rep = autoRepeat(session.id, body.pilot_id, body.scenario_id, mode, weather); const pendingId = `PENDING-${crypto.randomUUID()}`;
+  const mode = scenario.mode || 'CALM'; const weather = normalizeWeather(scenario.w_group); const uavId = `UAV-${String(body.pilot_id).replace(/^PILOT-/, '')}`; const batteryId = body.battery_no ? `BAT-${String(body.battery_no).trim()}` : ''; const rep = autoRepeat(session.id, body.pilot_id, body.scenario_id, mode, weather); const pendingId = `PENDING-${crypto.randomUUID()}`;
   const result = db.prepare(`INSERT INTO flights(flight_id,session_id,round_id,scenario_id,pilot_id,uav_id,battery_id,fl,mode,weather,rep,status,notes,operator,created_at,updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(pendingId, session.id, scenario.round_id, body.scenario_id, body.pilot_id, uavId, '', body.fl || '', mode, weather, rep, 'planned', body.notes || '', body.operator || '', now(), now());
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(pendingId, session.id, scenario.round_id, body.scenario_id, body.pilot_id, uavId, batteryId, body.fl || '', mode, weather, rep, 'planned', body.notes || '', body.operator || '', now(), now());
   emitEvent(result.lastInsertRowid, 'flight_created'); res.json({ id: result.lastInsertRowid });
 });
 app.patch('/api/flights/:id', (req, res) => {
@@ -254,9 +254,9 @@ app.get('/api/files/:id', (req, res) => { const f = db.prepare('SELECT * FROM fi
 
 function csvEscape(v) { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }
 function exportCsv() {
-  const rows = db.prepare(`SELECT f.flight_id, f.pilot_id, p.name pilot_name, f.uav_id, f.battery_id, f.scenario_id, s.code scenario_code, f.mode, f.weather, f.rep, f.status, f.result, f.notes, f.created_at, f.updated_at
+  const rows = db.prepare(`SELECT f.flight_id, f.pilot_id, p.name pilot_name, f.uav_id, f.battery_id, f.scenario_id, s.code scenario_code, f.mode, f.weather, f.rep, CASE WHEN f.result <> '' THEN f.result WHEN f.status='completed' THEN 'success' WHEN f.status='failed' THEN 'failed' ELSE f.status END AS result, f.notes, f.created_at, f.updated_at
     FROM flights f LEFT JOIN pilots p ON p.pilot_id=f.pilot_id LEFT JOIN scenarios s ON s.id=f.scenario_id ORDER BY f.id`).all();
-  const headers = Object.keys(rows[0] || { flight_id:'', pilot_id:'', pilot_name:'', uav_id:'', battery_id:'', scenario_code:'', mode:'', weather:'', rep:'', status:'', result:'', notes:'', created_at:'', updated_at:'' });
+  const headers = Object.keys(rows[0] || { flight_id:'', pilot_id:'', pilot_name:'', uav_id:'', battery_id:'', scenario_code:'', mode:'', weather:'', rep:'', result:'', notes:'', created_at:'', updated_at:'' });
   return [headers.join(','), ...rows.map(r => headers.map(h => csvEscape(r[h])).join(','))].join('\n');
 }
 app.get('/api/export.csv', (_, res) => { res.set('Content-Type', 'text/csv; charset=utf-8'); res.set('Content-Disposition', 'attachment; filename=telem2-flights.csv'); res.send(exportCsv()); });
