@@ -2,6 +2,7 @@
 param(
     [string]$Port,
     [int]$PollSeconds = 1,
+    [string]$Telem2Url = 'http://localhost:5050',
     [switch]$Once,
     [switch]$VerboseLog
 )
@@ -15,12 +16,14 @@ $ErrorActionPreference = 'Stop'
 $logPrefix = '[Telem2 Betaflight MSC]'
 function Write-Log([string]$Message) { Write-Host "$logPrefix $Message" }
 
+function Report-Status([string]$Status,[string]$TargetPort,[string]$Message) { try { Invoke-RestMethod -Uri ($Telem2Url.TrimEnd('/') + '/api/drone-status') -Method Post -ContentType 'application/json' -Body (@{state=$Status;port=$TargetPort;computer=$env:COMPUTERNAME;message=$Message}|ConvertTo-Json -Compress) | Out-Null } catch { Write-Warning "$logPrefix Could not report status to $Telem2Url: $($_.Exception.Message)" } }
 function Get-SerialPorts {
     [System.IO.Ports.SerialPort]::GetPortNames() | Sort-Object
 }
 
 function Send-MassStorageCommand([string]$TargetPort) {
     Write-Log "Opening $TargetPort at 115200 baud."
+    Report-Status 'connecting' $TargetPort 'Checking Betaflight firmware'
     $serial = New-Object System.IO.Ports.SerialPort $TargetPort,115200,None,8,one
     $serial.ReadTimeout = 1000
     $serial.WriteTimeout = 1000
@@ -40,7 +43,9 @@ function Send-MassStorageCommand([string]$TargetPort) {
             throw "The device on $TargetPort did not identify itself as Betaflight; no msc command was sent."
         }
         $serial.Write("msc`r`n")
+        Report-Status 'verified' $TargetPort 'Betaflight verified; switching to mass storage'
         Write-Log "Verified Betaflight on $TargetPort and sent '#', 'version', then 'msc'."
+        Report-Status 'mass_storage' $TargetPort 'Flight controller rebooted into mass-storage mode'
         Write-Log 'The FC should now appear as a USB mass-storage drive. Power-cycle it after transfer.'
     }
     finally {
@@ -70,6 +75,7 @@ while ($true) {
         }
         catch {
             Write-Warning "$logPrefix Could not send the command to ${newPort}: $($_.Exception.Message)"
+            Report-Status 'error' $newPort $_.Exception.Message
         }
         if ($Once) { exit 0 }
     }
