@@ -3,6 +3,7 @@ param(
     [string]$Port,
     [int]$PollSeconds = 1,
     [string]$Telem2Url = 'http://localhost:5050',
+    [string]$OperatorName = $env:USERNAME,
     [switch]$Once,
     [switch]$VerboseLog
 )
@@ -16,7 +17,7 @@ $ErrorActionPreference = 'Stop'
 $logPrefix = '[Telem2 Betaflight MSC]'
 function Write-Log([string]$Message) { Write-Host "$logPrefix $Message" }
 
-function Report-Status([string]$Status,[string]$TargetPort,[string]$Message) { try { Invoke-RestMethod -Uri ($Telem2Url.TrimEnd('/') + '/api/drone-status') -Method Post -ContentType 'application/json' -Body (@{state=$Status;port=$TargetPort;computer=$env:COMPUTERNAME;message=$Message}|ConvertTo-Json -Compress) | Out-Null } catch { Write-Warning "$logPrefix Could not report status to ${Telem2Url}: $($_.Exception.Message)" } }
+function Report-Status([string]$Status,[string]$TargetPort,[string]$Message) { try { Invoke-RestMethod -Uri ($Telem2Url.TrimEnd('/') + '/api/drone-status') -Method Post -ContentType 'application/json' -Body (@{state=$Status;port=$TargetPort;computer=$env:COMPUTERNAME;operator=$OperatorName;message=$Message}|ConvertTo-Json -Compress) | Out-Null } catch { Write-Warning "$logPrefix Could not report status to ${Telem2Url}: $($_.Exception.Message)" } }
 function Get-SerialPorts {
     [System.IO.Ports.SerialPort]::GetPortNames() | Sort-Object
 }

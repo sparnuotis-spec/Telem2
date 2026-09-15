@@ -69,6 +69,14 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\tools\betaflight-mass-storage.ps1
 ```
 
+The watcher reports the Windows username by default. To show the operator’s real name, pass `-OperatorName`:
+
+```powershell
+.\tools\betaflight-mass-storage.ps1 -OperatorName "Markas" -Telem2Url http://192.168.1.25:5050
+```
+
+The host dashboard then shows the operator, computer, COM port, state, and update time. A client laptop reports to the host when its `-Telem2Url` points to the host; the client does not need to run its own Telem2 server.
+
 If the watcher is running on a second laptop, point its status reports at the host Telem2 server:
 
 ```powershell
