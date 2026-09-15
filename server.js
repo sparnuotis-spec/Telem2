@@ -15,6 +15,7 @@ fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 fs.mkdirSync(DELETED_BACKUP_DIR, { recursive: true });
 const db = new Database(path.join(DATA_DIR, 'telem2.sqlite'));
 const transferPresence = new Map();
+const connectedUsers = new Map();
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 for (const column of [
@@ -159,6 +160,7 @@ app.get('/api/events', (req, res) => {
   req.on('close', () => clients.delete(res));
 });
 
+app.post('/api/user-presence',(req,res)=>{const body=req.body||{};const clientId=String(body.client_id||'').slice(0,80);if(!clientId)return res.status(400).json({error:'Client is required.'});connectedUsers.set(clientId,{name:String(body.name||'Admin').slice(0,60),updated_at:Date.now()});broadcast();res.json({ok:true});});
 app.post('/api/transfer-presence', (req,res)=>{ const body=req.body||{}; const flightId=Number(body.flight_id); const admin=String(body.admin||'Admin').slice(0,60); if(!flightId)return res.status(400).json({error:'Flight is required.'}); const key=String(flightId); if(body.action==='close') transferPresence.delete(key); else transferPresence.set(key,{admin,mode:body.action==='uploading'?'uploading':'open',updated_at:Date.now()}); broadcast(); res.json({ok:true}); });
 app.get('/api/state', (req, res) => {
   const requestedSessionId = Number(req.query.session_id || 0);
@@ -173,8 +175,8 @@ app.get('/api/state', (req, res) => {
     WHERE f.session_id = ? ORDER BY f.id`).all(session?.id || -1);
   const files = db.prepare('SELECT * FROM files ORDER BY id DESC').all();
   const participants = session ? db.prepare('SELECT pilot_id FROM session_participants WHERE session_id=? ORDER BY pilot_id').all(session.id).map(x=>x.pilot_id) : [];
-  for (const [key,value] of transferPresence) if (Date.now()-value.updated_at>30000) transferPresence.delete(key);
-  res.json({ session, sessions, participants, pilots, uavs, rounds, scenarios, flights: flights.map(f => ({ ...f, display_name: flightName(f) })), files, transfer_presence:Object.fromEntries(transferPresence) });
+  for (const [key,value] of transferPresence) if (Date.now()-value.updated_at>30000) transferPresence.delete(key); for (const [key,value] of connectedUsers) if (Date.now()-value.updated_at>15000) connectedUsers.delete(key);
+  res.json({ session, sessions, participants, pilots, uavs, rounds, scenarios, flights: flights.map(f => ({ ...f, display_name: flightName(f) })), files, transfer_presence:Object.fromEntries(transferPresence), connected_users:[...connectedUsers.values()] });
 });
 
 app.post('/api/session', (req, res) => {
