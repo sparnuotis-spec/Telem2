@@ -227,6 +227,8 @@ app.patch('/api/flights/:id', (req, res) => {
 app.post('/api/flights/:id/files', upload.array('files', 10), (req, res) => {
   const flight = db.prepare('SELECT * FROM flights WHERE id=?').get(req.params.id); if (!flight) return res.status(404).json({ error: 'Flight not found.' });
   const requestedKind = req.body.kind || 'telemetry'; const kind = requestedKind === 'goggles' ? 'goggles' : 'telemetry'; const folderName = kind === 'goggles' ? 'goggles' : 'blackbox'; const destination = path.join(UPLOAD_DIR, flight.flight_id, folderName); fs.mkdirSync(destination, { recursive: true });
+  const allowed = kind === 'goggles' ? ['.mp4','.mov','.mkv','.webm'] : ['.bbl','.bfl','.dat','.txt','.csv'];
+  for (const file of req.files || []) { const ext = path.extname(file.originalname).toLowerCase(); if (!allowed.includes(ext)) { fs.rmSync(file.path, { force: true }); return res.status(400).json({ error: `Invalid ${kind} file. Allowed: ${allowed.join(', ')}` }); } }
   const saved = [];
   for (const file of req.files || []) {
     const finalPath = path.join(destination, `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`); fs.renameSync(file.path, finalPath);
