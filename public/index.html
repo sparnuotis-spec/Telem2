@@ -3,6 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#171d3b" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Telem2" />
   <title>Telem2 · Flight Operations</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
@@ -22,7 +26,7 @@
         <button class="nav-link session-nav" data-view="audit"><span>≋</span> Audit log</button>
         <button class="nav-link admin-nav" data-view="admin"><span>▤</span> Admin</button>
       </nav>
-      <div class="session-timer-sidebar" id="sessionTimerBar"></div><div class="connected-users" id="connectedUsers"><div class="mini-label">CONNECTED USERS</div><div class="connected-users-list"></div></div><div class="sidebar-foot"><div class="mini-label">HOST MODE</div><div class="host-address" id="hostAddress">0.0.0.0:5050</div><p>Open this address from the second laptop or phones on the same Wi‑Fi.</p></div>
+      <div class="session-timer-sidebar" id="sessionTimerBar"></div><div class="connected-users" id="connectedUsers"><div class="mini-label">CONNECTED USERS</div><div class="connected-users-list"></div></div><div class="sidebar-foot"><div class="mini-label">OPEN ON THIS NETWORK</div><div class="host-address" id="hostAddress">Loading address…</div><p>Use this address on another PC, Android, or iPhone connected to the same Wi‑Fi.</p></div>
     </aside>
     <main class="main">
       <header class="topbar"><div><div class="eyebrow" id="eyebrow">OPERATIONS CENTER</div><h1 id="pageTitle">Sessions</h1></div><div class="top-actions"><button class="ghost hidden" id="backSessions">← Sessions</button><button class="ghost" id="syncBtn">↥ Sync snapshot</button><a class="primary" href="/api/export.csv">↓ Export CSV</a></div></header>
