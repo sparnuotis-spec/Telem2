@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS events (
 );
 `);
 try { db.exec('ALTER TABLE flights ADD COLUMN sd_transfer_ack INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
+try { db.exec('ALTER TABLE events ADD COLUMN session_id INTEGER'); } catch (_) {}
 db.prepare("UPDATE flights SET status='completed', result='needs_sd_transfer' WHERE result='sd_transfer_complete'").run();
 
 const app = express();
@@ -134,7 +135,8 @@ const broadcast = () => clients.forEach(res => { try { res.write(`data: ${JSON.s
 const clients = new Set();
 const uploadLocks = new Set();
 const emitEvent = (flightId, type, details = '') => {
-  db.prepare('INSERT INTO events (flight_id,event_type,details,created_at) VALUES (?,?,?,?)').run(flightId || null, type, details, now());
+  const sessionId = flightId ? db.prepare('SELECT session_id FROM flights WHERE flight_id=?').get(flightId)?.session_id || null : null;
+  db.prepare('INSERT INTO events (flight_id,session_id,event_type,details,created_at) VALUES (?,?,?,?,?)').run(flightId || null, sessionId, type, details, now());
   broadcast();
 };
 const normalizeTag = value => String(value || '').toLowerCase() === 'sd card' ? 'sd card' : 'regular';
@@ -174,9 +176,10 @@ app.get('/api/state', (req, res) => {
     FROM flights f LEFT JOIN rounds r ON r.id=f.round_id LEFT JOIN scenarios s ON s.id=f.scenario_id LEFT JOIN pilots p ON p.pilot_id=f.pilot_id
     WHERE f.session_id = ? ORDER BY f.id`).all(session?.id || -1);
   const files = db.prepare('SELECT * FROM files ORDER BY id DESC').all();
+  const events = session ? db.prepare(`SELECT e.*,COALESCE(e.session_id,f.session_id) AS event_session_id,COALESCE(e.flight_id,'') AS event_flight_id FROM events e LEFT JOIN flights f ON f.flight_id=e.flight_id WHERE e.session_id=? OR f.session_id=? ORDER BY e.id DESC LIMIT 500`).all(session.id,session.id) : [];
   const participants = session ? db.prepare('SELECT pilot_id FROM session_participants WHERE session_id=? ORDER BY pilot_id').all(session.id).map(x=>x.pilot_id) : [];
   for (const [key,value] of transferPresence) if (Date.now()-value.updated_at>30000) transferPresence.delete(key); for (const [key,value] of connectedUsers) if (Date.now()-value.updated_at>15000) connectedUsers.delete(key);
-  res.json({ session, sessions, participants, pilots, uavs, rounds, scenarios, flights: flights.map(f => ({ ...f, display_name: flightName(f) })), files, transfer_presence:Object.fromEntries(transferPresence), connected_users:[...connectedUsers.values()] });
+  res.json({ session, sessions, participants, pilots, uavs, rounds, scenarios, flights: flights.map(f => ({ ...f, display_name: flightName(f) })), files, events, transfer_presence:Object.fromEntries(transferPresence), connected_users:[...connectedUsers.values()] });
 });
 
 app.post('/api/session', (req, res) => {
@@ -261,7 +264,8 @@ app.patch('/api/flights/:id', (req, res) => {
 app.delete('/api/flights/:id', (req, res) => {
   const id = Number(req.params.id); const flight = db.prepare('SELECT * FROM flights WHERE id=?').get(id); if (!flight) return res.status(404).json({ error: 'Flight not found.' });
   const files = db.prepare('SELECT stored_path FROM files WHERE flight_id=?').all(flight.flight_id); files.forEach(f => fs.rmSync(f.stored_path, { force: true }));
-  db.prepare('DELETE FROM files WHERE flight_id=?').run(flight.flight_id); db.prepare('DELETE FROM events WHERE flight_id=?').run(flight.flight_id); db.prepare('DELETE FROM flights WHERE id=?').run(id);
+  emitEvent(flight.flight_id, 'flight_deleted', JSON.stringify({flight_id:flight.flight_id,pilot_id:flight.pilot_id,scenario_id:flight.scenario_id})); db.prepare('UPDATE events SET session_id=? WHERE flight_id=?').run(flight.session_id,flight.flight_id);
+  db.prepare('DELETE FROM files WHERE flight_id=?').run(flight.flight_id); db.prepare('DELETE FROM flights WHERE id=?').run(id);
   fs.rmSync(path.join(UPLOAD_DIR, flight.flight_id), { recursive: true, force: true }); broadcast(); res.json({ ok: true });
 });
 app.post('/api/sd-transfer/:pilot/confirm', (req, res) => {
