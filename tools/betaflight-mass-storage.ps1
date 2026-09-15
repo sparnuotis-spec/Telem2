@@ -68,6 +68,7 @@ if ($Port) {
 
 $known = @(Get-SerialPorts)
 $massStorageDevices = @{}
+$reconnectInProgress = @{}
 Write-Log "Watching for a newly connected Betaflight USB serial port. Press Ctrl+C to stop."
 if ($known.Count) { Write-Log "Currently present: $($known -join ', ')" }
 
@@ -90,16 +91,19 @@ while ($true) {
     $removedPorts = @($known | Where-Object { $current -notcontains $_ })
     foreach ($removedPort in $removedPorts) { if (-not $massStorageDevices.ContainsKey($removedPort)) { Report-Status 'disconnected' $removedPort 'Flight controller disconnected' } }
     $newPorts = @($current | Where-Object { $known -notcontains $_ })
-    foreach ($newPort in $newPorts) {
-        Write-Log "New serial port detected: $newPort"
+    $reconnectedPorts = @($current | Where-Object { $massStorageDevices.ContainsKey($_) -and -not $reconnectInProgress.ContainsKey($_) })
+    foreach ($portToProcess in @($newPorts + $reconnectedPorts | Select-Object -Unique)) {
+        if ($reconnectedPorts -contains $portToProcess) { $reconnectInProgress[$portToProcess] = $true; Write-Log "Previously handled port reconnected: $portToProcess" }
+        else { Write-Log "New serial port detected: $portToProcess" }
         try {
-            Send-MassStorageCommand $newPort
+            Send-MassStorageCommand $portToProcess
         }
         catch {
-            Write-Warning "$logPrefix Could not send the command to ${newPort}: $($_.Exception.Message)"
-            Report-Status 'error' $newPort $_.Exception.Message
+            Write-Warning "$logPrefix Could not send the command to ${portToProcess}: $($_.Exception.Message)"
+            Report-Status 'error' $portToProcess $_.Exception.Message
         }
         if ($Once) { exit 0 }
     }
+    foreach ($port in @($reconnectInProgress.Keys)) { if ($current -notcontains $port) { $reconnectInProgress.Remove($port) } }
     $known = $current
 }
