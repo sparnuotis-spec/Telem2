@@ -136,6 +136,7 @@ app.get('/api/events', (req, res) => {
 
 app.get('/api/state', (_, res) => {
   const session = db.prepare("SELECT * FROM sessions ORDER BY id DESC LIMIT 1").get() || null;
+  const sessions = db.prepare('SELECT * FROM sessions ORDER BY date DESC, id DESC').all();
   const pilots = db.prepare('SELECT * FROM pilots ORDER BY pilot_id').all();
   const uavs = db.prepare('SELECT * FROM uavs ORDER BY uav_id').all();
   const rounds = db.prepare('SELECT * FROM rounds WHERE session_id = ? ORDER BY position, id').all(session?.id || -1);
@@ -144,7 +145,7 @@ app.get('/api/state', (_, res) => {
     FROM flights f LEFT JOIN rounds r ON r.id=f.round_id LEFT JOIN scenarios s ON s.id=f.scenario_id LEFT JOIN pilots p ON p.pilot_id=f.pilot_id
     WHERE f.session_id = ? ORDER BY f.id`).all(session?.id || -1);
   const files = db.prepare('SELECT * FROM files ORDER BY id DESC').all();
-  res.json({ session, pilots, uavs, rounds, scenarios, flights: flights.map(f => ({ ...f, display_name: flightName(f) })), files });
+  res.json({ session, sessions, pilots, uavs, rounds, scenarios, flights: flights.map(f => ({ ...f, display_name: flightName(f) })), files });
 });
 
 app.post('/api/session', (req, res) => {
