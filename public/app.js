@@ -1,4 +1,4 @@
-let state = { session:null,sessions:[],participants:[],pilots:[],uavs:[],rounds:[],scenarios:[],flights:[],files:[],transfer_presence:{},connected_users:[],events:[],drone_status:{state:'disconnected',message:'No flight controller connected'},drone_status_history:[] };
+let state = { session:null,sessions:[],participants:[],pilots:[],uavs:[],rounds:[],scenarios:[],flights:[],files:[],transfer_presence:{},connected_users:[],events:[],drone_status:{state:'disconnected',message:'No flight controller connected'} };
 let selectedSessionId = Number(new URLSearchParams(location.search).get('session_id'))||null;
 let currentView = new URLSearchParams(location.search).get('sd_transfer') ? 'sdTransfer' : 'setup';
 const sdTransferPilotFromUrl = new URLSearchParams(location.search).get('sd_transfer');
