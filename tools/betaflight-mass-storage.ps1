@@ -23,6 +23,7 @@ function Get-SerialPorts {
 }
 
 function Send-MassStorageCommand([string]$TargetPort) {
+    $beforeVolumes = @(Get-Volume | Where-Object { $_.DriveType -eq 'Removable' -and $_.DriveLetter } | ForEach-Object { [string]$_.DriveLetter })
     Write-Log "Opening $TargetPort at 115200 baud."
     Report-Status 'connecting' $TargetPort 'Checking Betaflight firmware'
     $serial = New-Object System.IO.Ports.SerialPort $TargetPort,115200,None,8,one
@@ -49,7 +50,8 @@ function Send-MassStorageCommand([string]$TargetPort) {
         Report-Status 'mass_storage' $TargetPort 'Flight controller rebooted into mass-storage mode'
         $script:massStorageDevices[$TargetPort] = @()
         Start-Sleep -Seconds 2
-        $script:massStorageDevices[$TargetPort] = @(Get-Volume | Where-Object { $_.DriveType -eq 'Removable' -and $_.DriveLetter } | ForEach-Object { [string]$_.DriveLetter })
+        $afterVolumes = @(Get-Volume | Where-Object { $_.DriveType -eq 'Removable' -and $_.DriveLetter } | ForEach-Object { [string]$_.DriveLetter })
+        $script:massStorageDevices[$TargetPort] = @($afterVolumes | Where-Object { $beforeVolumes -notcontains $_ })
         Write-Log 'The FC should now appear as a USB mass-storage drive. Power-cycle it after transfer.'
     }
     finally {
