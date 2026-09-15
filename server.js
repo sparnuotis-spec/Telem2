@@ -160,7 +160,7 @@ app.get('/api/events', (req, res) => {
   req.on('close', () => clients.delete(res));
 });
 
-app.post('/api/user-presence',(req,res)=>{const body=req.body||{};const clientId=String(body.client_id||'').slice(0,80);if(!clientId)return res.status(400).json({error:'Client is required.'});connectedUsers.set(clientId,{name:String(body.name||'Admin').slice(0,60),updated_at:Date.now()});broadcast();res.json({ok:true});});
+app.post('/api/user-presence',(req,res)=>{const body=req.body||{};const clientId=String(body.client_id||'').slice(0,80);if(!clientId)return res.status(400).json({error:'Client is required.'});connectedUsers.set(clientId,{client_id:clientId,name:String(body.name||'Admin').slice(0,60),updated_at:Date.now()});broadcast();res.json({ok:true});});
 app.post('/api/transfer-presence', (req,res)=>{ const body=req.body||{}; const flightId=Number(body.flight_id); const admin=String(body.admin||'Admin').slice(0,60); if(!flightId)return res.status(400).json({error:'Flight is required.'}); const key=String(flightId); if(body.action==='close') transferPresence.delete(key); else transferPresence.set(key,{admin,mode:body.action==='uploading'?'uploading':'open',updated_at:Date.now()}); broadcast(); res.json({ok:true}); });
 app.get('/api/state', (req, res) => {
   const requestedSessionId = Number(req.query.session_id || 0);
