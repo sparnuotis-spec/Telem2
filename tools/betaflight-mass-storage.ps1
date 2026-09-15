@@ -44,8 +44,9 @@ function Send-MassStorageCommand([string]$TargetPort) {
         Write-Log 'The FC should now appear as a USB mass-storage drive. Power-cycle it after transfer.'
     }
     finally {
-        if ($serial.IsOpen) { $serial.Close() }
-        $serial.Dispose()
+        # The FC intentionally disappears from COM after msc reboots it.
+        try { if ($serial.IsOpen) { $serial.Close() } } catch { }
+        try { $serial.Dispose() } catch { }
     }
 }
 
