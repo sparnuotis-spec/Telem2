@@ -240,7 +240,7 @@ app.post('/api/pilots', (req, res) => {
   const t = now();
   if (existing) db.prepare('UPDATE pilots SET name=?,tag=?,active=1,updated_at=? WHERE pilot_id=?').run(name, tag, t, pilot_id);
   else db.prepare('INSERT INTO pilots(pilot_id,name,tag,created_at,updated_at) VALUES (?,?,?,?,?)').run(pilot_id, name, tag, t, t);
-  broadcast(); res.json({ ok: true });
+  broadcast(); res.json({ ok: true, pilot: { pilot_id, name, tag, active: 1 } });
 });
 app.post('/api/uavs', (req, res) => {
   const { uav_id, drone_type, notes } = req.body || {}; if (!uav_id || !['sd card','regular'].includes(drone_type)) return res.status(400).json({ error: 'UAV ID and drone type are required.' });
