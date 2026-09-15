@@ -125,6 +125,11 @@ CREATE TABLE IF NOT EXISTS events (
 try { db.exec('ALTER TABLE flights ADD COLUMN sd_transfer_ack INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
 try { db.exec('ALTER TABLE events ADD COLUMN session_id INTEGER'); } catch (_) {}
 db.prepare("UPDATE flights SET status='completed', result='needs_sd_transfer' WHERE result='sd_transfer_complete'").run();
+db.exec(`CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
+const existingMaxFlight = db.prepare("SELECT MAX(CAST(SUBSTR(flight_id,4) AS INTEGER)) AS n FROM flights WHERE flight_id LIKE 'FL-%'").get()?.n || 0;
+const sequenceStart = Math.max(197, Number(existingMaxFlight) + 1);
+db.prepare("INSERT INTO app_settings(key,value) VALUES ('next_flight_number',?) ON CONFLICT(key) DO NOTHING").run(String(sequenceStart));
+
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -148,8 +153,9 @@ const normalizeTag = value => String(value || '').toLowerCase() === 'sd card' ? 
 const normalizeMode = value => String(value || '').toUpperCase() === 'DYN' ? 'DYN' : 'CALM';
 const normalizeWeather = value => String(value || '').toUpperCase() === 'W2' ? 'W2' : 'W1';
 const nextFlightId = () => {
-  const row = db.prepare("SELECT flight_id FROM flights WHERE flight_id LIKE 'FL-%' ORDER BY id DESC LIMIT 1").get();
-  const n = row ? Number(String(row.flight_id).replace('FL-', '')) + 1 : 1;
+  const row = db.prepare("SELECT value FROM app_settings WHERE key='next_flight_number'").get();
+  const n = Math.max(197, Number(row?.value) || 197);
+  db.prepare("UPDATE app_settings SET value=? WHERE key='next_flight_number'").run(String(n + 1));
   return `FL-${String(n).padStart(6, '0')}`;
 };
 const autoRepeat = (sessionId, pilotId, scenarioId, mode, weather) => {
