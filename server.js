@@ -225,6 +225,12 @@ app.patch('/api/flights/:id', (req, res) => {
   db.prepare(`UPDATE flights SET ${updates.join(',')} WHERE id=?`).run(...values); emitEvent(flight.flight_id, 'flight_updated', JSON.stringify(body)); res.json({ ok: true });
 });
 
+app.delete('/api/flights/:id', (req, res) => {
+  const id = Number(req.params.id); const flight = db.prepare('SELECT * FROM flights WHERE id=?').get(id); if (!flight) return res.status(404).json({ error: 'Flight not found.' });
+  const files = db.prepare('SELECT stored_path FROM files WHERE flight_id=?').all(flight.flight_id); files.forEach(f => fs.rmSync(f.stored_path, { force: true }));
+  db.prepare('DELETE FROM files WHERE flight_id=?').run(flight.flight_id); db.prepare('DELETE FROM events WHERE flight_id=?').run(flight.flight_id); db.prepare('DELETE FROM flights WHERE id=?').run(id);
+  fs.rmSync(path.join(UPLOAD_DIR, flight.flight_id), { recursive: true, force: true }); broadcast(); res.json({ ok: true });
+});
 app.post('/api/flights/:id/files', upload.array('files', 10), (req, res) => {
   const flight = db.prepare('SELECT * FROM flights WHERE id=?').get(req.params.id); if (!flight) return res.status(404).json({ error: 'Flight not found.' });
   const requestedKind = req.body.kind || 'telemetry'; const kind = requestedKind === 'goggles' ? 'goggles' : 'telemetry'; const folderName = kind === 'goggles' ? 'goggles' : 'blackbox'; const destination = path.join(UPLOAD_DIR, flight.flight_id, folderName); fs.mkdirSync(destination, { recursive: true });
