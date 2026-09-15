@@ -179,15 +179,15 @@ app.post('/api/uavs', (req, res) => {
 });
 
 app.post('/api/rounds', (req, res) => {
-  const session = db.prepare("SELECT id FROM sessions WHERE status='active' ORDER BY id DESC LIMIT 1").get(); if (!session) return res.status(400).json({ error: 'Create an active session first.' });
-  const body = req.body || {}; const result = db.prepare('INSERT INTO rounds(session_id,name,w_group,position,status) VALUES (?,?,?,?,?)').run(session.id, body.name || 'Round', normalizeWeather(body.w_group), Number(body.position || 0), 'planned'); broadcast(); res.json({ id: result.lastInsertRowid });
+  const body = req.body || {}; const session = body.session_id ? db.prepare('SELECT id FROM sessions WHERE id=?').get(body.session_id) : db.prepare("SELECT id FROM sessions WHERE status='active' ORDER BY id DESC LIMIT 1").get(); if (!session) return res.status(400).json({ error: 'Create or select a session first.' });
+  const result = db.prepare('INSERT INTO rounds(session_id,name,w_group,position,status) VALUES (?,?,?,?,?)').run(session.id, body.name || 'Round', normalizeWeather(body.w_group), Number(body.position || 0), 'planned'); broadcast(); res.json({ id: result.lastInsertRowid });
 });
 app.post('/api/scenarios', (req, res) => {
   const body = req.body || {}; if (!body.round_id || !body.code || !body.name) return res.status(400).json({ error: 'Round, scenario code, and name are required.' });
   const result = db.prepare('INSERT INTO scenarios(round_id,code,name,mode,position) VALUES (?,?,?,?,?)').run(body.round_id, body.code, body.name, normalizeMode(body.mode), Number(body.position || 0)); broadcast(); res.json({ id: result.lastInsertRowid });
 });
 app.post('/api/flights', (req, res) => {
-  const body = req.body || {}; const session = db.prepare("SELECT id FROM sessions WHERE status='active' ORDER BY id DESC LIMIT 1").get(); if (!session) return res.status(400).json({ error: 'Create an active session first.' });
+  const body = req.body || {}; const session = body.session_id ? db.prepare('SELECT id FROM sessions WHERE id=?').get(body.session_id) : db.prepare("SELECT id FROM sessions WHERE status='active' ORDER BY id DESC LIMIT 1").get(); if (!session) return res.status(400).json({ error: 'Create or select a session first.' });
   if (!body.pilot_id || !body.scenario_id) return res.status(400).json({ error: 'Pilot and scenario are required.' });
   const result = db.prepare(`INSERT INTO flights(flight_id,session_id,round_id,scenario_id,pilot_id,uav_id,battery_id,fl,mode,weather,rep,status,notes,operator,created_at,updated_at)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(body.flight_id || nextFlightId(), session.id, body.round_id || null, body.scenario_id || null, body.pilot_id, body.uav_id || '', body.battery_id || '', body.fl || '', normalizeMode(body.mode), normalizeWeather(body.weather), body.rep || 'REP-01', 'planned', body.notes || '', body.operator || '', now(), now());
