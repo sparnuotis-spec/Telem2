@@ -75,6 +75,14 @@ For a safer one-device/manual test, specify the COM port:
 .\tools\betaflight-mass-storage.ps1 -Port COM4
 ```
 
+`npm start` starts only the Telem2 web server; it does not automatically start the USB watcher. For the host PC, double-click this combined launcher instead:
+
+```text
+tools\start-telem2-host.cmd
+```
+
+It opens one window for Telem2 and one window for the Betaflight watcher. After that, open `http://localhost:5050` in the host browser. You can still start the two components separately if preferred.
+
 For normal use, start the watcher once and leave its PowerShell window open. It will keep watching for newly connected flight controllers; you do not need to paste the command for every drone. You can also double-click:
 
 ```text
