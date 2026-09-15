@@ -4,17 +4,7 @@ Telem2 is a local-network flight operations dashboard for FPV drone blackbox tel
 
 ## Run locally
 
-On a fresh Windows checkout, install dependencies once before starting the server:
-
-```powershell
-npm install
-npm start
-```
-
-If `npm start` reports `Cannot find module 'express'`, the local `node_modules` folder is missing or incomplete. Run `npm install` from the folder containing `package.json`; do not run it from the parent folder. If necessary, rebuild dependencies:
-
-```powershell
-Remove-Item -Recurse -Force node_modules
+```bash
 npm install
 npm start
 ```
@@ -67,60 +57,3 @@ curl http://localhost:5050/api/health
 ## Data safety
 
 Do not commit `data/`, Google credentials, real telemetry, or real video files. Raw files should remain original; the app stores checksums and links each file to a single Flight ID.
-
-## Regular-pilot Betaflight mass-storage helper
-
-For regular pilots, connect the flight controller to the transfer computer with a USB data cable. The Windows helper at `tools/betaflight-mass-storage.ps1` watches for a new serial port, verifies that the device identifies as Betaflight, and then sends the CLI sequence automatically.
-
-Run PowerShell from the Telem2 folder:
-
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\tools\betaflight-mass-storage.ps1
-```
-
-The watcher uses the name entered by the user in the Telem2 browser app. It no longer uses the Windows PC username by default. To override the app name explicitly, pass `-OperatorName`:
-
-```powershell
-.\tools\betaflight-mass-storage.ps1 -OperatorName "Markas" -Telem2Url http://192.168.1.25:5050
-```
-
-The host dashboard then shows the operator, computer, COM port, state, and update time. A client laptop reports to the host when its `-Telem2Url` points to the host; the client does not need to run its own Telem2 server.
-
-If the watcher is running on a second laptop, point its status reports at the host Telem2 server:
-
-```powershell
-.\tools\betaflight-mass-storage.ps1 -Telem2Url http://192.168.1.25:5050
-```
-
-Replace `192.168.1.25` with the host PC address. The browser dashboard will show the USB computer, COM port, and whether Betaflight was verified or mass-storage mode was reached.
-
-For a safer one-device/manual test, specify the COM port:
-
-```powershell
-.\tools\betaflight-mass-storage.ps1 -Port COM4
-```
-
-`npm start` starts only the Telem2 web server; it does not automatically start the USB watcher. For the host PC, double-click this combined launcher instead:
-
-```text
-tools\start-telem2-host.cmd
-```
-
-It opens one window for Telem2 and one window for the Betaflight watcher. After that, open `http://localhost:5050` in the host browser. You can still start the two components separately if preferred.
-
-For normal use, start the watcher once and leave its PowerShell window open. It will keep watching for newly connected flight controllers; you do not need to paste the command for every drone. You can also double-click:
-
-```text
-tools\start-betaflight-watcher.cmd
-```
-
-To start it automatically when Windows logs in, create a shortcut to `start-betaflight-watcher.cmd`, press `Win+R`, enter `shell:startup`, and place the shortcut in that Startup folder. Keep the host computer awake and leave the watcher running during the transfer session.
-
-The Betaflight command used for mass-storage mode is:
-
-```text
-msc
-```
-
-The helper enters the CLI with `#`, sends `version`, and sends `msc` only if the response contains `Betaflight`. The official Betaflight documentation states that `msc` reboots supported F4, G4, F7, and H7 flight controllers into USB mass-storage mode; normal flight-controller operation stops until power-cycled. This is a firmware reboot command, not a flight command, so disconnect propellers and do not use it while armed or flying.

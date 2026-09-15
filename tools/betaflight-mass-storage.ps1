@@ -2,8 +2,6 @@
 param(
     [string]$Port,
     [int]$PollSeconds = 1,
-    [string]$Telem2Url = 'http://localhost:5050',
-    [string]$OperatorName = '',
     [switch]$Once,
     [switch]$VerboseLog
 )
@@ -17,15 +15,12 @@ $ErrorActionPreference = 'Stop'
 $logPrefix = '[Telem2 Betaflight MSC]'
 function Write-Log([string]$Message) { Write-Host "$logPrefix $Message" }
 
-function Report-Status([string]$Status,[string]$TargetPort,[string]$Message) { try { Invoke-RestMethod -Uri ($Telem2Url.TrimEnd('/') + '/api/drone-status') -Method Post -ContentType 'application/json' -Body (@{state=$Status;port=$TargetPort;computer=$env:COMPUTERNAME;operator=$OperatorName;message=$Message}|ConvertTo-Json -Compress) | Out-Null } catch { Write-Warning "$logPrefix Could not report status to ${Telem2Url}: $($_.Exception.Message)" } }
 function Get-SerialPorts {
     [System.IO.Ports.SerialPort]::GetPortNames() | Sort-Object
 }
 
 function Send-MassStorageCommand([string]$TargetPort) {
-    $beforeVolumes = @(Get-Volume | Where-Object { $_.DriveType -eq 'Removable' -and $_.DriveLetter } | ForEach-Object { [string]$_.DriveLetter })
     Write-Log "Opening $TargetPort at 115200 baud."
-    Report-Status 'connecting' $TargetPort 'Checking Betaflight firmware'
     $serial = New-Object System.IO.Ports.SerialPort $TargetPort,115200,None,8,one
     $serial.ReadTimeout = 1000
     $serial.WriteTimeout = 1000
@@ -45,19 +40,12 @@ function Send-MassStorageCommand([string]$TargetPort) {
             throw "The device on $TargetPort did not identify itself as Betaflight; no msc command was sent."
         }
         $serial.Write("msc`r`n")
-        Report-Status 'verified' $TargetPort 'Betaflight verified; switching to mass storage'
         Write-Log "Verified Betaflight on $TargetPort and sent '#', 'version', then 'msc'."
-        Report-Status 'mass_storage' $TargetPort 'Flight controller rebooted into mass-storage mode'
-        $script:massStorageDevices[$TargetPort] = @()
-        Start-Sleep -Seconds 2
-        $afterVolumes = @(Get-Volume | Where-Object { $_.DriveType -eq 'Removable' -and $_.DriveLetter } | ForEach-Object { [string]$_.DriveLetter })
-        $script:massStorageDevices[$TargetPort] = @($afterVolumes | Where-Object { $beforeVolumes -notcontains $_ })
         Write-Log 'The FC should now appear as a USB mass-storage drive. Power-cycle it after transfer.'
     }
     finally {
-        # The FC intentionally disappears from COM after msc reboots it.
-        try { if ($serial.IsOpen) { $serial.Close() } } catch { }
-        try { $serial.Dispose() } catch { }
+        if ($serial.IsOpen) { $serial.Close() }
+        $serial.Dispose()
     }
 }
 
@@ -67,38 +55,12 @@ if ($Port) {
 }
 
 $known = @(Get-SerialPorts)
-$massStorageDevices = @{}
 Write-Log "Watching for a newly connected Betaflight USB serial port. Press Ctrl+C to stop."
 if ($known.Count) { Write-Log "Currently present: $($known -join ', ')" }
 
 while ($true) {
     Start-Sleep -Seconds ([Math]::Max(1,$PollSeconds))
     $current = @(Get-SerialPorts)
-
-    # Each mass-storage drive is associated with the COM port that created it.
-    foreach ($devicePort in @($massStorageDevices.Keys)) {
-        $knownVolumes = @($massStorageDevices[$devicePort])
-        $currentVolumes = @(Get-Volume | Where-Object { $_.DriveType -eq 'Removable' -and $_.DriveLetter } | ForEach-Object { [string]$_.DriveLetter })
-        if ($knownVolumes.Count -eq 0) {
-            $massStorageDevices[$devicePort] = $currentVolumes
-            continue
-        }
-        $removedVolumes = @($knownVolumes | Where-Object { $currentVolumes -notcontains $_ })
-        if ($removedVolumes.Count -gt 0) {
-            Report-Status 'disconnected' $devicePort 'Mass-storage drive disconnected'
-            $massStorageDevices.Remove($devicePort)
-        }
-    }
-
-    $removedPorts = @($known | Where-Object { $current -notcontains $_ })
-    foreach ($removedPort in $removedPorts) {
-        if (-not $massStorageDevices.ContainsKey($removedPort)) {
-            Report-Status 'disconnected' $removedPort 'Flight controller disconnected'
-        }
-    }
-
-    # A reboot into msc removes the COM port. A later physical reconnect makes
-    # it a new port event again, even when Windows reuses the same COM number.
     $newPorts = @($current | Where-Object { $known -notcontains $_ })
     foreach ($newPort in $newPorts) {
         Write-Log "New serial port detected: $newPort"
@@ -106,8 +68,7 @@ while ($true) {
             Send-MassStorageCommand $newPort
         }
         catch {
-            Write-Warning "$logPrefix Could not send the command to ${newPort}: $($_.Exception.Message)"
-            Report-Status 'error' $newPort $_.Exception.Message
+            Write-Warning "$logPrefix Could not send the command to $newPort: $($_.Exception.Message)"
         }
         if ($Once) { exit 0 }
     }
