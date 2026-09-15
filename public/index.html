@@ -9,7 +9,7 @@
 <body>
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="brand"><div class="brand-mark-wrap"><div class="brand-mark">T2</div><span id="brandSessionBadge">—</span></div><div><strong>Telem2</strong><span>flight operations</span></div></div>
+      <div class="brand"><div class="brand-mark" id="brandMark">—</div><div><strong>Telem2</strong><span>flight operations</span></div></div>
       <div class="connection"><i id="connectionDot"></i><span id="connectionText">Connecting…</span></div>
       <nav>
         <button class="nav-link session-nav active" data-view="live"><span>◉</span> LiveView</button>
@@ -28,6 +28,7 @@
       <section id="planningView" class="view"></section>
       <section id="historyView" class="view"></section>
       <section id="adminView" class="view"></section>
+      <section id="flightDetailView" class="view"></section>
     </main>
   </div>
   <script src="/app.js"></script>

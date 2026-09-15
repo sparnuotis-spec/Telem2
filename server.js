@@ -203,15 +203,17 @@ app.post('/api/rounds', (req, res) => {
   const result = db.prepare('INSERT INTO rounds(session_id,name,w_group,position,status) VALUES (?,?,?,?,?)').run(session.id, body.name || 'Round', normalizeWeather(body.w_group), Number(body.position || 0), 'planned'); broadcast(); res.json({ id: result.lastInsertRowid });
 });
 app.post('/api/scenarios', (req, res) => {
-  const body = req.body || {}; if (!body.round_id || !body.code || !body.name) return res.status(400).json({ error: 'Round, scenario code, and name are required.' });
-  const result = db.prepare('INSERT INTO scenarios(round_id,code,name,mode,position) VALUES (?,?,?,?,?)').run(body.round_id, body.code, body.name, normalizeMode(body.mode), Number(body.position || 0)); broadcast(); res.json({ id: result.lastInsertRowid });
+  const body = req.body || {}; if (!body.round_id || !body.name) return res.status(400).json({ error: 'Round and scenario are required.' });
+  const codes = {'Linijinis skrydis A–B–A':'SC-01','Kvadratas':'SC-02','Ovalas':'SC-03','Freestyle / trys laiptai':'SC-04','Slalomas':'SC-05','Aštuoniukė':'SC-06'}; const code = body.code || codes[body.name] || 'SC-CUSTOM';
+  const result = db.prepare('INSERT INTO scenarios(round_id,code,name,mode,position) VALUES (?,?,?,?,?)').run(body.round_id, code, body.name, 'CALM', Number(body.position || 0)); broadcast(); res.json({ id: result.lastInsertRowid });
 });
 app.post('/api/flights', (req, res) => {
   const body = req.body || {}; const session = body.session_id ? db.prepare('SELECT id FROM sessions WHERE id=?').get(body.session_id) : db.prepare("SELECT id FROM sessions WHERE status='active' ORDER BY id DESC LIMIT 1").get(); if (!session) return res.status(400).json({ error: 'Create or select a session first.' });
   if (!body.pilot_id || !body.scenario_id) return res.status(400).json({ error: 'Pilot and scenario are required.' });
-  const mode = normalizeMode(body.mode); const weather = normalizeWeather(body.weather); const uavId = `UAV-${String(body.pilot_id).replace(/^PILOT-/, '')}`; const batteryId = body.battery_no ? `BAT-${String(body.battery_no).trim()}` : ''; const rep = autoRepeat(session.id, body.pilot_id, body.scenario_id, mode, weather);
+  const scenario = db.prepare('SELECT s.*, r.w_group FROM scenarios s JOIN rounds r ON r.id=s.round_id WHERE s.id=?').get(body.scenario_id); if (!scenario) return res.status(400).json({ error: 'Scenario not found.' });
+  const mode = scenario.mode || 'CALM'; const weather = normalizeWeather(scenario.w_group); const uavId = `UAV-${String(body.pilot_id).replace(/^PILOT-/, '')}`; const rep = autoRepeat(session.id, body.pilot_id, body.scenario_id, mode, weather); const pendingId = `PENDING-${crypto.randomUUID()}`;
   const result = db.prepare(`INSERT INTO flights(flight_id,session_id,round_id,scenario_id,pilot_id,uav_id,battery_id,fl,mode,weather,rep,status,notes,operator,created_at,updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(body.flight_id || nextFlightId(), session.id, body.round_id || null, body.scenario_id || null, body.pilot_id, uavId, batteryId, body.fl || '', mode, weather, rep, 'planned', body.notes || '', body.operator || '', now(), now());
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(pendingId, session.id, scenario.round_id, body.scenario_id, body.pilot_id, uavId, '', body.fl || '', mode, weather, rep, 'planned', body.notes || '', body.operator || '', now(), now());
   emitEvent(result.lastInsertRowid, 'flight_created'); res.json({ id: result.lastInsertRowid });
 });
 app.patch('/api/flights/:id', (req, res) => {
@@ -224,14 +226,16 @@ app.patch('/api/flights/:id', (req, res) => {
 
 app.post('/api/flights/:id/files', upload.array('files', 10), (req, res) => {
   const flight = db.prepare('SELECT * FROM flights WHERE id=?').get(req.params.id); if (!flight) return res.status(404).json({ error: 'Flight not found.' });
-  const kind = req.body.kind || 'raw'; const destination = path.join(UPLOAD_DIR, flight.flight_id); fs.mkdirSync(destination, { recursive: true });
+  const requestedKind = req.body.kind || 'telemetry'; const kind = requestedKind === 'goggles' ? 'goggles' : 'telemetry'; const folderName = kind === 'goggles' ? 'goggles' : 'blackbox'; const destination = path.join(UPLOAD_DIR, flight.flight_id, folderName); fs.mkdirSync(destination, { recursive: true });
   const saved = [];
   for (const file of req.files || []) {
     const finalPath = path.join(destination, `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`); fs.renameSync(file.path, finalPath);
     const hash = crypto.createHash('sha256').update(fs.readFileSync(finalPath)).digest('hex');
     const r = db.prepare('INSERT INTO files(flight_id,kind,original_name,stored_path,size,sha256,created_at) VALUES (?,?,?,?,?,?,?)').run(flight.flight_id, kind, file.originalname, finalPath, file.size, hash, now()); saved.push({ id: r.lastInsertRowid, original_name: file.originalname, size: file.size, sha256: hash });
   }
-  emitEvent(flight.flight_id, 'files_uploaded', `${saved.length} ${kind} file(s)`); res.json({ files: saved });
+  let assignedFlightId = flight.flight_id; const kinds = db.prepare('SELECT DISTINCT kind FROM files WHERE flight_id=?').all(flight.flight_id).map(x => x.kind);
+  if (flight.flight_id.startsWith('PENDING-') && kinds.includes('telemetry') && kinds.includes('goggles')) { assignedFlightId = nextFlightId(); const oldRoot = path.join(UPLOAD_DIR, flight.flight_id); const newRoot = path.join(UPLOAD_DIR, assignedFlightId); db.prepare('UPDATE flights SET flight_id=?,updated_at=? WHERE id=?').run(assignedFlightId, now(), flight.id); db.prepare('UPDATE files SET flight_id=?,stored_path=replace(stored_path,?,?) WHERE flight_id=?').run(assignedFlightId, oldRoot, newRoot, flight.flight_id); if (fs.existsSync(oldRoot)) fs.renameSync(oldRoot, newRoot); }
+  emitEvent(assignedFlightId, 'files_uploaded', `${saved.length} ${kind} file(s)`); res.json({ files: saved, flight_id: assignedFlightId, assigned: assignedFlightId !== flight.flight_id });
 });
 app.get('/api/files/:id', (req, res) => { const f = db.prepare('SELECT * FROM files WHERE id=?').get(req.params.id); if (!f || !fs.existsSync(f.stored_path)) return res.status(404).end(); res.download(f.stored_path, f.original_name); });
 
