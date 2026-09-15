@@ -16,6 +16,11 @@ fs.mkdirSync(DELETED_BACKUP_DIR, { recursive: true });
 const db = new Database(path.join(DATA_DIR, 'telem2.sqlite'));
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
+for (const column of [
+  ['timer_elapsed', 'INTEGER NOT NULL DEFAULT 0'],
+  ['timer_started_at', 'TEXT'],
+  ['timer_running', 'INTEGER NOT NULL DEFAULT 0']
+]) { try { db.exec(`ALTER TABLE sessions ADD COLUMN ${column[0]} ${column[1]}`); } catch (_) {} }
 db.exec(`
 CREATE TABLE IF NOT EXISTS sessions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -183,7 +188,13 @@ app.put('/api/session/:id/participants', (req, res) => {
   const tx=db.transaction(()=>{db.prepare('DELETE FROM session_participants WHERE session_id=?').run(sessionId); const add=db.prepare('INSERT INTO session_participants(session_id,pilot_id) VALUES (?,?)'); valid.forEach(id=>add.run(sessionId,id));}); tx(); broadcast(); res.json({ok:true,participants:valid});
 });
 app.patch('/api/session/:id', (req, res) => {
-  const body = req.body || {}; const t = now(); db.prepare('UPDATE sessions SET notes=COALESCE(?,notes), status=COALESCE(?,status), updated_at=? WHERE id=?').run(body.notes, body.status, t, req.params.id); emitEvent(null, 'session_updated'); res.json({ ok: true });
+  const body = req.body || {}; const t = now(); const id = Number(req.params.id); const current = db.prepare('SELECT * FROM sessions WHERE id=?').get(id);
+  if (!current) return res.status(404).json({error:'Session not found.'});
+  if (body.timer_action === 'start') db.prepare('UPDATE sessions SET timer_running=1,timer_started_at=COALESCE(timer_started_at,?),updated_at=? WHERE id=?').run(t,t,id);
+  else if (body.timer_action === 'stop') { const elapsed=Number(current.timer_elapsed||0)+(current.timer_running&&current.timer_started_at?Math.max(0,Date.now()-Date.parse(current.timer_started_at)):0); db.prepare('UPDATE sessions SET timer_elapsed=?,timer_started_at=NULL,timer_running=0,updated_at=? WHERE id=?').run(elapsed,t,id); }
+  else if (body.timer_action === 'reset') db.prepare('UPDATE sessions SET timer_elapsed=0,timer_started_at=NULL,timer_running=0,updated_at=? WHERE id=?').run(t,id);
+  else db.prepare('UPDATE sessions SET notes=COALESCE(?,notes), status=COALESCE(?,status), updated_at=? WHERE id=?').run(body.notes, body.status, t, id);
+  emitEvent(null, 'session_updated'); res.json({ ok: true });
 });
 app.delete('/api/session/:id', (req, res) => {
   const id = Number(req.params.id); const session = db.prepare('SELECT * FROM sessions WHERE id=?').get(id); if (!session) return res.status(404).json({ error: 'Session not found.' });
