@@ -212,10 +212,9 @@ app.post('/api/flights', (req, res) => {
   const body = req.body || {}; const session = body.session_id ? db.prepare('SELECT id FROM sessions WHERE id=?').get(body.session_id) : db.prepare("SELECT id FROM sessions WHERE status='active' ORDER BY id DESC LIMIT 1").get(); if (!session) return res.status(400).json({ error: 'Create or select a session first.' });
   if (!body.pilot_id || !body.scenario_id) return res.status(400).json({ error: 'Pilot and scenario are required.' });
   const scenario = db.prepare('SELECT s.*, r.w_group FROM scenarios s JOIN rounds r ON r.id=s.round_id WHERE s.id=?').get(body.scenario_id); if (!scenario) return res.status(400).json({ error: 'Scenario not found.' });
-  const mode = scenario.mode || 'CALM'; const weather = normalizeWeather(scenario.w_group); const uavId = `UAV-${String(body.pilot_id).replace(/^PILOT-/, '')}`; const batteryId = body.battery_no ? `BAT-${String(body.battery_no).trim()}` : ''; const rep = autoRepeat(session.id, body.pilot_id, body.scenario_id, mode, weather); const pendingId = `PENDING-${crypto.randomUUID()}`;
-  const result = db.prepare(`INSERT INTO flights(flight_id,session_id,round_id,scenario_id,pilot_id,uav_id,battery_id,fl,mode,weather,rep,status,notes,operator,created_at,updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(pendingId, session.id, scenario.round_id, body.scenario_id, body.pilot_id, uavId, batteryId, body.fl || '', mode, weather, rep, 'planned', body.notes || '', body.operator || '', now(), now());
-  emitEvent(result.lastInsertRowid, 'flight_created'); res.json({ id: result.lastInsertRowid });
+  const uavId = `UAV-${String(body.pilot_id).replace(/^PILOT-/, '')}`; const created = []; const insert = db.prepare(`INSERT INTO flights(flight_id,session_id,round_id,scenario_id,pilot_id,uav_id,battery_id,fl,mode,weather,rep,status,notes,operator,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+  const tx = db.transaction(() => { for (const mode of ['CALM','DYN']) for (let i=1;i<=4;i++) { const rep=`REP-${String(i).padStart(2,'0')}`; const pendingId=`PENDING-${crypto.randomUUID()}`; const result=insert.run(pendingId,session.id,scenario.round_id,body.scenario_id,body.pilot_id,uavId,'','',mode,normalizeWeather(scenario.w_group),rep,'planned',body.notes||'',body.operator||'',now(),now()); created.push({id:result.lastInsertRowid,mode,rep}); } });
+  tx(); emitEvent(null, 'flight_series_created', `${created.length} pending flights`); res.json({ ids: created.map(x=>x.id), count: created.length });
 });
 app.patch('/api/flights/:id', (req, res) => {
   const allowed = ['pilot_id','uav_id','battery_id','fl','mode','weather','rep','status','result','notes','operator','claimed_by','round_id','scenario_id'];
