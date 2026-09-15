@@ -283,7 +283,7 @@ app.get('/api/files/:id', (req, res) => { const f = db.prepare('SELECT * FROM fi
 function csvEscape(v) { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }
 function exportCsv() {
   const rows = db.prepare(`SELECT f.flight_id, f.pilot_id, p.name pilot_name, f.uav_id, f.battery_id, f.scenario_id, s.code scenario_code, f.mode, f.weather, f.rep, CASE WHEN f.result <> '' THEN f.result WHEN f.status='completed' THEN 'success' WHEN f.status='failed' THEN 'failed' ELSE f.status END AS result, f.notes, f.created_at, f.updated_at
-    FROM flights f LEFT JOIN pilots p ON p.pilot_id=f.pilot_id LEFT JOIN scenarios s ON s.id=f.scenario_id ORDER BY f.id`).all();
+    FROM flights f LEFT JOIN pilots p ON p.pilot_id=f.pilot_id LEFT JOIN scenarios s ON s.id=f.scenario_id ORDER BY CASE WHEN f.flight_id LIKE 'PENDING-%' THEN 1 ELSE 0 END, CASE WHEN f.flight_id LIKE 'FL-%' THEN CAST(SUBSTR(f.flight_id,4) AS INTEGER) ELSE 2147483647 END, f.id`).all();
   const headers = Object.keys(rows[0] || { flight_id:'', pilot_id:'', pilot_name:'', uav_id:'', battery_id:'', scenario_code:'', mode:'', weather:'', rep:'', result:'', notes:'', created_at:'', updated_at:'' });
   return [headers.join(','), ...rows.map(r => headers.map(h => csvEscape(r[h])).join(','))].join('\n');
 }
