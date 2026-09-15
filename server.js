@@ -243,6 +243,9 @@ app.post('/api/flights/:id/files', upload.array('files', 10), (req, res) => {
       assignedFlightDbId = result.lastInsertRowid; db.prepare('UPDATE files SET flight_id=?,stored_path=replace(stored_path,?,?) WHERE flight_id=?').run(assignedFlightId, oldRoot, newRoot, flight.flight_id); db.prepare('UPDATE events SET flight_id=? WHERE flight_id=?').run(assignedFlightId, flight.flight_id); db.prepare('DELETE FROM flights WHERE id=?').run(flight.id);
     });
     migrate(); if (fs.existsSync(oldRoot)) fs.renameSync(oldRoot, newRoot);
+    const scenario = db.prepare('SELECT code FROM scenarios WHERE id=?').get(flight.scenario_id); const stem = [assignedFlightId, flight.pilot_id, scenario?.code || 'SC', flight.mode, flight.weather, flight.rep].filter(Boolean).join('_').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const completedFiles = db.prepare('SELECT * FROM files WHERE flight_id=?').all(assignedFlightId);
+    for (const stored of completedFiles) { const folder = stored.kind === 'goggles' ? 'goggles' : 'blackbox'; const ext = path.extname(stored.original_name).toLowerCase(); const finalPath = path.join(newRoot, folder, `${stem}${ext}`); if (fs.existsSync(stored.stored_path)) fs.renameSync(stored.stored_path, finalPath); db.prepare('UPDATE files SET stored_path=? WHERE id=?').run(finalPath, stored.id); }
   }
   emitEvent(assignedFlightId, 'files_uploaded', `${saved.length} ${kind} file(s)`); res.json({ files: saved, flight_id: assignedFlightId, flight_db_id: assignedFlightDbId, assigned: assignedFlightId !== flight.flight_id });
 });
