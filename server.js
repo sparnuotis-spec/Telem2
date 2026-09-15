@@ -190,7 +190,7 @@ app.delete('/api/session/:id', (req, res) => {
   fs.writeFileSync(path.join(backupDir, 'manifest.json'), JSON.stringify({ session, rounds, scenarios, flights, files, backed_up_at: now() }, null, 2));
   const tx = db.transaction(() => {
     flights.forEach(f => { db.prepare('DELETE FROM files WHERE flight_id=?').run(f.flight_id); db.prepare('DELETE FROM events WHERE flight_id=?').run(f.flight_id); });
-    db.prepare('DELETE FROM flights WHERE session_id=?').run(id); db.prepare('DELETE FROM scenarios WHERE round_id IN (SELECT id FROM rounds WHERE session_id=?)').run(id); db.prepare('DELETE FROM rounds WHERE session_id=?').run(id); db.prepare('DELETE FROM sessions WHERE id=?').run(id);
+    db.prepare('DELETE FROM flights WHERE session_id=?').run(id); db.prepare('DELETE FROM scenarios WHERE round_id IN (SELECT id FROM rounds WHERE session_id=?)').run(id); db.prepare('DELETE FROM rounds WHERE session_id=?').run(id); db.prepare('DELETE FROM session_participants WHERE session_id=?').run(id); db.prepare('DELETE FROM sessions WHERE id=?').run(id);
     flights.forEach(f => fs.rmSync(path.join(UPLOAD_DIR, f.flight_id), { recursive: true, force: true }));
   });
   tx(); emitEvent(null, 'session_deleted', `Session ${session.session_no}`); res.json({ ok: true, backup_dir: backupDir });
