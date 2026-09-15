@@ -1,5 +1,4 @@
 @echo off
 setlocal
-cd /d "%~dp0.."
-start "Telem2 server" cmd /k "npm start"
-start "Betaflight mass-storage watcher" cmd /k "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%~dp0betaflight-mass-storage.ps1\""
+start "Telem2 server" /D "%~dp0.." cmd.exe /k npm start
+start "Betaflight mass-storage watcher" powershell.exe -NoExit -NoProfile -ExecutionPolicy Bypass -File "%~dp0betaflight-mass-storage.ps1"
