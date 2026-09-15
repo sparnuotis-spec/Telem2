@@ -229,7 +229,7 @@ app.post('/api/pilots', (req, res) => {
   const existing = db.prepare('SELECT * FROM pilots WHERE pilot_id=?').get(pilot_id);
   if (existing && existing.name !== name) return res.status(409).json({ error: 'Pilot IDs are immutable and already belong to another name.' });
   const t = now();
-  if (existing) db.prepare('UPDATE pilots SET tag=?,active=1,updated_at=? WHERE pilot_id=?').run(tag, t, pilot_id);
+  if (existing) db.prepare('UPDATE pilots SET name=?,tag=?,active=1,updated_at=? WHERE pilot_id=?').run(name, tag, t, pilot_id);
   else db.prepare('INSERT INTO pilots(pilot_id,name,tag,created_at,updated_at) VALUES (?,?,?,?,?)').run(pilot_id, name, tag, t, t);
   broadcast(); res.json({ ok: true });
 });

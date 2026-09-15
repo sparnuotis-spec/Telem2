@@ -51,3 +51,5 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%;overflow-x:hidden}body{
 
 
 .drone-status-list{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.drone-status-list .drone-status{min-width:210px}@media(max-width:650px){.drone-status-list{display:block}.drone-status-list .drone-status{margin-bottom:8px}}
+
+.pilot-row-actions{display:flex;align-items:center;gap:8px;margin-left:auto}.pilot-row-actions .small-btn{white-space:nowrap}
