@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS events (
   created_at TEXT NOT NULL
 );
 `);
+try { db.exec('ALTER TABLE flights ADD COLUMN sd_transfer_ack INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -229,7 +230,7 @@ app.post('/api/flights', (req, res) => {
   const tx=db.transaction(()=>{pilotIds.forEach(pilotId=>{const uavId=`UAV-${String(pilotId).replace(/^PILOT-/,'')}`; for(const mode of ['CALM','DYN'])for(let i=1;i<=4;i++){const rep=`REP-${String(i).padStart(2,'0')}`;const result=insert.run(`PENDING-${crypto.randomUUID()}`,session.id,scenario.round_id,body.scenario_id,pilotId,uavId,'','',mode,normalizeWeather(scenario.w_group),rep,'planned',body.notes||'',body.operator||'',now(),now());created.push(result.lastInsertRowid);}})}); tx(); emitEvent(null,'flight_series_created',`${created.length} pending flights`); res.json({ids:created,count:created.length});
 });
 app.patch('/api/flights/:id', (req, res) => {
-  const allowed = ['pilot_id','uav_id','battery_id','fl','mode','weather','rep','status','result','notes','operator','claimed_by','round_id','scenario_id'];
+  const allowed = ['pilot_id','uav_id','battery_id','fl','mode','weather','rep','status','result','notes','operator','claimed_by','round_id','scenario_id','sd_transfer_ack'];
   const body = req.body || {}; const flight = db.prepare('SELECT * FROM flights WHERE id=?').get(req.params.id); if (!flight) return res.status(404).json({ error: 'Flight not found.' });
   if (['ready','flying','transfer','completed'].includes(body.status) || body.result === 'success') { const repNo=Number(String(flight.rep||'REP-01').replace('REP-',''))||1; if (flight.mode==='DYN') { const calmDone=db.prepare("SELECT COUNT(*) AS n FROM flights WHERE session_id=? AND pilot_id=? AND scenario_id=? AND mode='CALM' AND status='completed' AND result IN ('success','needs_sd_transfer')").get(flight.session_id,flight.pilot_id,flight.scenario_id).n; if (calmDone < 4) return res.status(400).json({ error: 'Complete all four CALM repetitions for this scenario before starting DYN.' }); } if (repNo>1) { const previous=db.prepare('SELECT status,result FROM flights WHERE session_id=? AND pilot_id=? AND scenario_id=? AND mode=? AND rep=?').get(flight.session_id,flight.pilot_id,flight.scenario_id,flight.mode,`REP-${String(repNo-1).padStart(2,'0')}`); if (!previous || previous.status!=='completed' || !['success','needs_sd_transfer'].includes(previous.result)) return res.status(400).json({ error: `Complete ${flight.mode} REP-${String(repNo-1).padStart(2,'0')} before advancing.` }); } }
   if ((body.status === 'completed' || body.result === 'success')) { const kinds = db.prepare('SELECT DISTINCT kind FROM files WHERE flight_id=?').all(flight.flight_id).map(x => x.kind); if (!kinds.includes('telemetry') || !kinds.includes('goggles')) { const pilot=db.prepare('SELECT tag FROM pilots WHERE pilot_id=?').get(flight.pilot_id); if (pilot?.tag !== 'sd card') return res.status(400).json({ error: 'Upload both telemetry and goggles video before marking success.' }); body.result='needs_sd_transfer'; } }
