@@ -16,6 +16,7 @@ fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 fs.mkdirSync(DELETED_BACKUP_DIR, { recursive: true });
 const db = new Database(path.join(DATA_DIR, 'telem2.sqlite'));
 const transferPresence = new Map();
+let droneStatus = { state:'disconnected', port:'', computer:'', message:'No flight controller connected', updated_at:0 };
 const connectedUsers = new Map();
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
@@ -164,6 +165,7 @@ app.get('/api/events', (req, res) => {
   req.on('close', () => clients.delete(res));
 });
 
+app.post('/api/drone-status',(req,res)=>{const body=req.body||{};const allowed=['disconnected','connecting','verified','mass_storage','error'];const status=String(body.state||'').toLowerCase();if(!allowed.includes(status))return res.status(400).json({error:'Invalid drone status.'});droneStatus={state:status,port:String(body.port||'').slice(0,20),computer:String(body.computer||'').slice(0,80),message:String(body.message||status).slice(0,160),updated_at:Date.now()};broadcast();res.json({ok:true,drone_status:droneStatus});});
 app.post('/api/user-presence',(req,res)=>{const body=req.body||{};const clientId=String(body.client_id||'').slice(0,80);if(!clientId)return res.status(400).json({error:'Client is required.'});connectedUsers.set(clientId,{client_id:clientId,name:String(body.name||'Admin').slice(0,60),updated_at:Date.now()});broadcast();res.json({ok:true});});
 app.post('/api/transfer-presence', (req,res)=>{ const body=req.body||{}; const flightId=Number(body.flight_id); const admin=String(body.admin||'Admin').slice(0,60); const clientId=String(body.client_id||'').slice(0,80); const batchKey=String(body.batch_key||flightId); if(!flightId)return res.status(400).json({error:'Flight is required.'}); const nowMs=Date.now(); for(const [key,value] of transferPresence) if(nowMs-value.updated_at>30000) transferPresence.delete(key); if(body.action==='open'){const conflict=[...transferPresence.values()].find(v=>v.batch_key===batchKey&&v.updated_at>nowMs-30000&&v.client_id!==clientId);if(conflict)return res.status(409).json({error:`Transfer is already open by ${conflict.admin}.`});} const key=String(flightId); if(body.action==='close') transferPresence.delete(key); else transferPresence.set(key,{admin,client_id:clientId,batch_key:batchKey,mode:body.action==='uploading'?'uploading':'open',updated_at:nowMs}); broadcast(); res.json({ok:true}); });
 app.get('/api/state', (req, res) => {
@@ -181,7 +183,7 @@ app.get('/api/state', (req, res) => {
   const events = session ? db.prepare(`SELECT e.*,COALESCE(e.session_id,f.session_id) AS event_session_id,COALESCE(e.flight_id,'') AS event_flight_id FROM events e LEFT JOIN flights f ON f.flight_id=e.flight_id WHERE e.session_id=? OR f.session_id=? ORDER BY e.id DESC LIMIT 500`).all(session.id,session.id) : [];
   const participants = session ? db.prepare('SELECT pilot_id FROM session_participants WHERE session_id=? ORDER BY pilot_id').all(session.id).map(x=>x.pilot_id) : [];
   for (const [key,value] of transferPresence) if (Date.now()-value.updated_at>30000) transferPresence.delete(key); for (const [key,value] of connectedUsers) if (Date.now()-value.updated_at>15000) connectedUsers.delete(key);
-  res.json({ session, sessions, participants, pilots, uavs, rounds, scenarios, flights: flights.map(f => ({ ...f, display_name: flightName(f) })), files, events, transfer_presence:Object.fromEntries(transferPresence), connected_users:[...connectedUsers.values()], lan_url:lanAddress() });
+  res.json({ session, sessions, participants, pilots, uavs, rounds, scenarios, flights: flights.map(f => ({ ...f, display_name: flightName(f) })), files, events, transfer_presence:Object.fromEntries(transferPresence), connected_users:[...connectedUsers.values()], drone_status:droneStatus, lan_url:lanAddress() });
 });
 
 app.post('/api/session', (req, res) => {
