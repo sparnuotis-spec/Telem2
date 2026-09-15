@@ -136,9 +136,7 @@ app.get('/api/events', (req, res) => {
 
 app.get('/api/state', (req, res) => {
   const requestedSessionId = Number(req.query.session_id || 0);
-  const session = requestedSessionId
-    ? (db.prepare('SELECT * FROM sessions WHERE id=?').get(requestedSessionId) || null)
-    : (db.prepare("SELECT * FROM sessions ORDER BY id DESC LIMIT 1").get() || null);
+  const session = requestedSessionId ? (db.prepare('SELECT * FROM sessions WHERE id=?').get(requestedSessionId) || null) : null;
   const sessions = db.prepare('SELECT * FROM sessions ORDER BY date DESC, id DESC').all();
   const pilots = db.prepare('SELECT * FROM pilots ORDER BY pilot_id').all();
   const uavs = db.prepare('SELECT * FROM uavs ORDER BY uav_id').all();
