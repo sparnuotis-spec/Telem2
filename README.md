@@ -57,3 +57,7 @@ curl http://localhost:5050/api/health
 ## Data safety
 
 Do not commit `data/`, Google credentials, real telemetry, or real video files. Raw files should remain original; the app stores checksums and links each file to a single Flight ID.
+
+### Client computer connected to a drone
+
+On a non-host computer, double-click `tools\start-betaflight-watcher.cmd`. Enter the host URL shown in the Telem2 dashboard, for example `http://192.168.1.25:5050`. The launcher passes that URL to the watcher; it does not silently use the client’s `localhost`. The client watcher window displays the target URL and reports connecting, Betaflight verified, and mass-storage states to the host dashboard.

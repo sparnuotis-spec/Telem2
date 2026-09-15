@@ -65,6 +65,7 @@ if ($Port) {
 $known = @(Get-SerialPorts)
 $massStorageDevices = @{}
 $massStorageBaselines = @{}
+Write-Log "Reporting drone status to $Telem2Url"
 Write-Log "Watching for a newly connected Betaflight USB serial port. Press Ctrl+C to stop."
 if ($known.Count) { Write-Log "Currently present: $($known -join ', ')" }
 
