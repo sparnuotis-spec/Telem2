@@ -46,6 +46,7 @@ function Send-MassStorageCommand([string]$TargetPort) {
         Report-Status 'verified' $TargetPort 'Betaflight verified; switching to mass storage'
         Write-Log "Verified Betaflight on $TargetPort and sent '#', 'version', then 'msc'."
         Report-Status 'mass_storage' $TargetPort 'Flight controller rebooted into mass-storage mode'
+        $script:massStoragePort = $TargetPort
         Write-Log 'The FC should now appear as a USB mass-storage drive. Power-cycle it after transfer.'
     }
     finally {
@@ -61,12 +62,15 @@ if ($Port) {
 }
 
 $known = @(Get-SerialPorts)
+$massStoragePort = ''
 Write-Log "Watching for a newly connected Betaflight USB serial port. Press Ctrl+C to stop."
 if ($known.Count) { Write-Log "Currently present: $($known -join ', ')" }
 
 while ($true) {
     Start-Sleep -Seconds ([Math]::Max(1,$PollSeconds))
     $current = @(Get-SerialPorts)
+    $removedPorts = @($known | Where-Object { $current -notcontains $_ })
+    foreach ($removedPort in $removedPorts) { if ($removedPort -ne $massStoragePort) { Report-Status 'disconnected' $removedPort 'Flight controller disconnected' } }
     $newPorts = @($current | Where-Object { $known -notcontains $_ })
     foreach ($newPort in $newPorts) {
         Write-Log "New serial port detected: $newPort"
