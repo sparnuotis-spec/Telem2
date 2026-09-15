@@ -4,6 +4,8 @@ param(
     [int]$PollSeconds = 1,
     [string]$Telem2Url = 'http://localhost:5050',
     [string]$OperatorName = '',
+    [string]$Telem2Url = 'http://localhost:5050',
+    [string]$OperatorName = '',
     [switch]$Once,
     [switch]$VerboseLog
 )
