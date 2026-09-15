@@ -13,19 +13,21 @@
       <div class="connection"><i id="connectionDot"></i><span id="connectionText">Connecting…</span></div>
       <nav>
         <button class="nav-link session-nav active" data-view="live"><span>◉</span> LiveView</button>
-        <button class="nav-link session-nav" data-view="setup"><span>⚙</span> Setup</button>
+        <button class="nav-link session-nav setup-nav" data-view="setup"><span>⚙</span> Setup</button>
         <button class="nav-link session-nav" data-view="planning"><span>▦</span> Planning</button>
         <button class="nav-link session-nav" data-view="history"><span>⌁</span> History</button>
+        <button class="nav-link admin-nav" data-view="admin"><span>▤</span> Admin</button>
       </nav>
       <div class="sidebar-foot"><div class="mini-label">HOST MODE</div><div class="host-address" id="hostAddress">0.0.0.0:5050</div><p>Open this address from the second laptop or phones on the same Wi‑Fi.</p></div>
     </aside>
     <main class="main">
-      <header class="topbar"><div><div class="eyebrow" id="eyebrow">OPERATIONS CENTER</div><h1 id="pageTitle">LiveView</h1></div><div class="top-actions"><button class="ghost" id="syncBtn">↥ Sync snapshot</button><a class="primary" href="/api/export.csv">↓ Export CSV</a></div></header>
+      <header class="topbar"><div><div class="eyebrow" id="eyebrow">OPERATIONS CENTER</div><h1 id="pageTitle">Sessions</h1></div><div class="top-actions"><button class="ghost hidden" id="backSessions">← Sessions</button><button class="ghost" id="syncBtn">↥ Sync snapshot</button><a class="primary" href="/api/export.csv">↓ Export CSV</a></div></header>
       <section id="toast" class="toast hidden"></section>
       <section id="liveView" class="view active"></section>
       <section id="setupView" class="view"></section>
       <section id="planningView" class="view"></section>
       <section id="historyView" class="view"></section>
+      <section id="adminView" class="view"></section>
     </main>
   </div>
   <script src="/app.js"></script>

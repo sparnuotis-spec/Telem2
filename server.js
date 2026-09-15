@@ -13,6 +13,7 @@ const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 const db = new Database(path.join(DATA_DIR, 'telem2.sqlite'));
 db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
 db.exec(`
 CREATE TABLE IF NOT EXISTS sessions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -125,6 +126,12 @@ const nextFlightId = () => {
   const n = row ? Number(String(row.flight_id).replace('FL-', '')) + 1 : 1;
   return `FL-${String(n).padStart(6, '0')}`;
 };
+const autoRepeat = (sessionId, pilotId, scenarioId, mode, weather) => {
+  const latest = db.prepare('SELECT * FROM flights WHERE session_id=? AND pilot_id=? AND scenario_id=? AND mode=? AND weather=? ORDER BY id DESC LIMIT 1').get(sessionId, pilotId, scenarioId, mode, weather);
+  if (!latest) return 'REP-01';
+  const current = Number(String(latest.rep || 'REP-01').replace('REP-', '')) || 1;
+  return latest.status === 'completed' || latest.result === 'success' ? `REP-${String(Math.min(current + 1, 4)).padStart(2, '0')}` : `REP-${String(current).padStart(2, '0')}`;
+};
 const flightName = f => [f.flight_id, f.pilot_id, f.uav_id, f.battery_id, f.scenario_code, f.mode, f.weather, f.rep].filter(Boolean).join('__');
 
 app.get('/api/health', (_, res) => res.json({ ok: true, port: PORT, time: now() }));
@@ -161,6 +168,16 @@ app.post('/api/session', (req, res) => {
 app.patch('/api/session/:id', (req, res) => {
   const body = req.body || {}; const t = now(); db.prepare('UPDATE sessions SET notes=COALESCE(?,notes), status=COALESCE(?,status), updated_at=? WHERE id=?').run(body.notes, body.status, t, req.params.id); emitEvent(null, 'session_updated'); res.json({ ok: true });
 });
+app.delete('/api/session/:id', (req, res) => {
+  const id = Number(req.params.id); const session = db.prepare('SELECT * FROM sessions WHERE id=?').get(id); if (!session) return res.status(404).json({ error: 'Session not found.' });
+  const tx = db.transaction(() => {
+    const flights = db.prepare('SELECT flight_id FROM flights WHERE session_id=?').all(id);
+    flights.forEach(f => { db.prepare('DELETE FROM files WHERE flight_id=?').run(f.flight_id); db.prepare('DELETE FROM events WHERE flight_id=?').run(f.flight_id); });
+    db.prepare('DELETE FROM flights WHERE session_id=?').run(id); db.prepare('DELETE FROM scenarios WHERE round_id IN (SELECT id FROM rounds WHERE session_id=?)').run(id); db.prepare('DELETE FROM rounds WHERE session_id=?').run(id); db.prepare('DELETE FROM sessions WHERE id=?').run(id);
+    flights.forEach(f => fs.rmSync(path.join(UPLOAD_DIR, f.flight_id), { recursive: true, force: true }));
+  });
+  tx(); emitEvent(null, 'session_deleted', `Session ${session.session_no}`); res.json({ ok: true });
+});
 
 app.post('/api/pilots', (req, res) => {
   const { pilot_id, name, tag } = req.body || {}; if (!pilot_id || !name || !['sd card','regular'].includes(tag)) return res.status(400).json({ error: 'Pilot ID, name, and tag are required.' });
@@ -187,8 +204,9 @@ app.post('/api/scenarios', (req, res) => {
 app.post('/api/flights', (req, res) => {
   const body = req.body || {}; const session = body.session_id ? db.prepare('SELECT id FROM sessions WHERE id=?').get(body.session_id) : db.prepare("SELECT id FROM sessions WHERE status='active' ORDER BY id DESC LIMIT 1").get(); if (!session) return res.status(400).json({ error: 'Create or select a session first.' });
   if (!body.pilot_id || !body.scenario_id) return res.status(400).json({ error: 'Pilot and scenario are required.' });
+  const mode = normalizeMode(body.mode); const weather = normalizeWeather(body.weather); const uavId = `UAV-${String(body.pilot_id).replace(/^PILOT-/, '')}`; const batteryId = body.battery_no ? `BAT-${String(body.battery_no).trim()}` : ''; const rep = autoRepeat(session.id, body.pilot_id, body.scenario_id, mode, weather);
   const result = db.prepare(`INSERT INTO flights(flight_id,session_id,round_id,scenario_id,pilot_id,uav_id,battery_id,fl,mode,weather,rep,status,notes,operator,created_at,updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(body.flight_id || nextFlightId(), session.id, body.round_id || null, body.scenario_id || null, body.pilot_id, body.uav_id || '', body.battery_id || '', body.fl || '', normalizeMode(body.mode), normalizeWeather(body.weather), body.rep || 'REP-01', 'planned', body.notes || '', body.operator || '', now(), now());
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(body.flight_id || nextFlightId(), session.id, body.round_id || null, body.scenario_id || null, body.pilot_id, uavId, batteryId, body.fl || '', mode, weather, rep, 'planned', body.notes || '', body.operator || '', now(), now());
   emitEvent(result.lastInsertRowid, 'flight_created'); res.json({ id: result.lastInsertRowid });
 });
 app.patch('/api/flights/:id', (req, res) => {
