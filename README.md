@@ -4,7 +4,17 @@ Telem2 is a local-network flight operations dashboard for FPV drone blackbox tel
 
 ## Run locally
 
-```bash
+On a fresh Windows checkout, install dependencies once before starting the server:
+
+```powershell
+npm install
+npm start
+```
+
+If `npm start` reports `Cannot find module 'express'`, the local `node_modules` folder is missing or incomplete. Run `npm install` from the folder containing `package.json`; do not run it from the parent folder. If necessary, rebuild dependencies:
+
+```powershell
+Remove-Item -Recurse -Force node_modules
 npm install
 npm start
 ```
