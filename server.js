@@ -10,7 +10,9 @@ const PORT = Number(process.env.PORT || 5050);
 const ROOT = __dirname;
 const DATA_DIR = process.env.TELEM2_DATA_DIR || path.join(ROOT, 'data');
 const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
+const DELETED_BACKUP_DIR = path.join(DATA_DIR, 'deleted-backups');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+fs.mkdirSync(DELETED_BACKUP_DIR, { recursive: true });
 const db = new Database(path.join(DATA_DIR, 'telem2.sqlite'));
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
@@ -170,13 +172,16 @@ app.patch('/api/session/:id', (req, res) => {
 });
 app.delete('/api/session/:id', (req, res) => {
   const id = Number(req.params.id); const session = db.prepare('SELECT * FROM sessions WHERE id=?').get(id); if (!session) return res.status(404).json({ error: 'Session not found.' });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-'); const backupDir = path.join(DELETED_BACKUP_DIR, `${stamp}-session-${session.session_no.replace(/[^a-zA-Z0-9_-]/g, '_')}`); fs.mkdirSync(path.join(backupDir, 'files'), { recursive: true });
+  const rounds = db.prepare('SELECT * FROM rounds WHERE session_id=?').all(id); const scenarios = db.prepare('SELECT * FROM scenarios WHERE round_id IN (SELECT id FROM rounds WHERE session_id=?)').all(id); const flights = db.prepare('SELECT * FROM flights WHERE session_id=?').all(id); const files = db.prepare('SELECT * FROM files WHERE flight_id IN (SELECT flight_id FROM flights WHERE session_id=?)').all(id);
+  for (const file of files) if (fs.existsSync(file.stored_path)) fs.copyFileSync(file.stored_path, path.join(backupDir, 'files', file.original_name.replace(/[^a-zA-Z0-9._-]/g, '_')));
+  fs.writeFileSync(path.join(backupDir, 'manifest.json'), JSON.stringify({ session, rounds, scenarios, flights, files, backed_up_at: now() }, null, 2));
   const tx = db.transaction(() => {
-    const flights = db.prepare('SELECT flight_id FROM flights WHERE session_id=?').all(id);
     flights.forEach(f => { db.prepare('DELETE FROM files WHERE flight_id=?').run(f.flight_id); db.prepare('DELETE FROM events WHERE flight_id=?').run(f.flight_id); });
     db.prepare('DELETE FROM flights WHERE session_id=?').run(id); db.prepare('DELETE FROM scenarios WHERE round_id IN (SELECT id FROM rounds WHERE session_id=?)').run(id); db.prepare('DELETE FROM rounds WHERE session_id=?').run(id); db.prepare('DELETE FROM sessions WHERE id=?').run(id);
     flights.forEach(f => fs.rmSync(path.join(UPLOAD_DIR, f.flight_id), { recursive: true, force: true }));
   });
-  tx(); emitEvent(null, 'session_deleted', `Session ${session.session_no}`); res.json({ ok: true });
+  tx(); emitEvent(null, 'session_deleted', `Session ${session.session_no}`); res.json({ ok: true, backup_dir: backupDir });
 });
 
 app.post('/api/pilots', (req, res) => {
