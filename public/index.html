@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Telem2 · Flight Operations</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark">T2</div><div><strong>Telem2</strong><span>flight operations</span></div></div>
+      <div class="connection"><i id="connectionDot"></i><span id="connectionText">Connecting…</span></div>
+      <nav>
+        <button class="nav-link active" data-view="live"><span>◉</span> LiveView</button>
+        <button class="nav-link" data-view="setup"><span>⚙</span> Setup</button>
+        <button class="nav-link" data-view="planning"><span>▦</span> Planning</button>
+        <button class="nav-link" data-view="history"><span>⌁</span> History</button>
+      </nav>
+      <div class="sidebar-foot"><div class="mini-label">HOST MODE</div><div class="host-address" id="hostAddress">0.0.0.0:5050</div><p>Open this address from the second laptop or phones on the same Wi‑Fi.</p></div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div><div class="eyebrow" id="eyebrow">OPERATIONS CENTER</div><h1 id="pageTitle">LiveView</h1></div><div class="top-actions"><button class="ghost" id="syncBtn">↥ Sync snapshot</button><a class="primary" href="/api/export.csv">↓ Export CSV</a></div></header>
+      <section id="toast" class="toast hidden"></section>
+      <section id="liveView" class="view active"></section>
+      <section id="setupView" class="view"></section>
+      <section id="planningView" class="view"></section>
+      <section id="historyView" class="view"></section>
+    </main>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>
