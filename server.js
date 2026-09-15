@@ -227,7 +227,7 @@ app.patch('/api/flights/:id', (req, res) => {
 app.post('/api/flights/:id/files', upload.array('files', 10), (req, res) => {
   const flight = db.prepare('SELECT * FROM flights WHERE id=?').get(req.params.id); if (!flight) return res.status(404).json({ error: 'Flight not found.' });
   const requestedKind = req.body.kind || 'telemetry'; const kind = requestedKind === 'goggles' ? 'goggles' : 'telemetry'; const folderName = kind === 'goggles' ? 'goggles' : 'blackbox'; const destination = path.join(UPLOAD_DIR, flight.flight_id, folderName); fs.mkdirSync(destination, { recursive: true });
-  const allowed = kind === 'goggles' ? ['.mp4','.mov','.mkv','.webm'] : ['.bbl','.bfl','.dat','.txt','.csv'];
+  const allowed = kind === 'goggles' ? ['.mp4'] : ['.bbl','.bfl'];
   for (const file of req.files || []) { const ext = path.extname(file.originalname).toLowerCase(); if (!allowed.includes(ext)) { fs.rmSync(file.path, { force: true }); return res.status(400).json({ error: `Invalid ${kind} file. Allowed: ${allowed.join(', ')}` }); } }
   const saved = [];
   for (const file of req.files || []) {
@@ -243,7 +243,7 @@ app.post('/api/flights/:id/files', upload.array('files', 10), (req, res) => {
       assignedFlightDbId = result.lastInsertRowid; db.prepare('UPDATE files SET flight_id=?,stored_path=replace(stored_path,?,?) WHERE flight_id=?').run(assignedFlightId, oldRoot, newRoot, flight.flight_id); db.prepare('UPDATE events SET flight_id=? WHERE flight_id=?').run(assignedFlightId, flight.flight_id); db.prepare('DELETE FROM flights WHERE id=?').run(flight.id);
     });
     migrate(); if (fs.existsSync(oldRoot)) fs.renameSync(oldRoot, newRoot);
-    const scenario = db.prepare('SELECT code FROM scenarios WHERE id=?').get(flight.scenario_id); const stem = [assignedFlightId, flight.pilot_id, scenario?.code || 'SC', flight.mode, flight.weather, flight.rep].filter(Boolean).join('_').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const stem = assignedFlightId;
     const completedFiles = db.prepare('SELECT * FROM files WHERE flight_id=?').all(assignedFlightId);
     for (const stored of completedFiles) { const folder = stored.kind === 'goggles' ? 'goggles' : 'blackbox'; const ext = path.extname(stored.original_name).toLowerCase(); const finalPath = path.join(newRoot, folder, `${stem}${ext}`); if (fs.existsSync(stored.stored_path)) fs.renameSync(stored.stored_path, finalPath); db.prepare('UPDATE files SET stored_path=? WHERE id=?').run(finalPath, stored.id); }
   }
