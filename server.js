@@ -35,6 +35,13 @@ CREATE TABLE IF NOT EXISTS pilots (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS session_participants (
+  session_id INTEGER NOT NULL,
+  pilot_id TEXT NOT NULL,
+  PRIMARY KEY(session_id, pilot_id),
+  FOREIGN KEY(session_id) REFERENCES sessions(id),
+  FOREIGN KEY(pilot_id) REFERENCES pilots(pilot_id)
+);
 CREATE TABLE IF NOT EXISTS uavs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   uav_id TEXT NOT NULL UNIQUE,
@@ -155,7 +162,8 @@ app.get('/api/state', (req, res) => {
     FROM flights f LEFT JOIN rounds r ON r.id=f.round_id LEFT JOIN scenarios s ON s.id=f.scenario_id LEFT JOIN pilots p ON p.pilot_id=f.pilot_id
     WHERE f.session_id = ? ORDER BY f.id`).all(session?.id || -1);
   const files = db.prepare('SELECT * FROM files ORDER BY id DESC').all();
-  res.json({ session, sessions, pilots, uavs, rounds, scenarios, flights: flights.map(f => ({ ...f, display_name: flightName(f) })), files });
+  const participants = session ? db.prepare('SELECT pilot_id FROM session_participants WHERE session_id=? ORDER BY pilot_id').all(session.id).map(x=>x.pilot_id) : [];
+  res.json({ session, sessions, participants, pilots, uavs, rounds, scenarios, flights: flights.map(f => ({ ...f, display_name: flightName(f) })), files });
 });
 
 app.post('/api/session', (req, res) => {
@@ -166,6 +174,10 @@ app.post('/api/session', (req, res) => {
     return result.lastInsertRowid;
   });
   const id = tx(); emitEvent(null, 'session_created', `Session ${body.session_no}`); res.json({ id });
+});
+app.put('/api/session/:id/participants', (req, res) => {
+  const sessionId=Number(req.params.id); const ids=[...new Set((req.body?.pilot_ids||[]).map(String))]; const valid=ids.filter(id=>db.prepare('SELECT 1 FROM pilots WHERE pilot_id=?').get(id));
+  const tx=db.transaction(()=>{db.prepare('DELETE FROM session_participants WHERE session_id=?').run(sessionId); const add=db.prepare('INSERT INTO session_participants(session_id,pilot_id) VALUES (?,?)'); valid.forEach(id=>add.run(sessionId,id));}); tx(); broadcast(); res.json({ok:true,participants:valid});
 });
 app.patch('/api/session/:id', (req, res) => {
   const body = req.body || {}; const t = now(); db.prepare('UPDATE sessions SET notes=COALESCE(?,notes), status=COALESCE(?,status), updated_at=? WHERE id=?').run(body.notes, body.status, t, req.params.id); emitEvent(null, 'session_updated'); res.json({ ok: true });
@@ -210,11 +222,11 @@ app.post('/api/scenarios', (req, res) => {
 });
 app.post('/api/flights', (req, res) => {
   const body = req.body || {}; const session = body.session_id ? db.prepare('SELECT id FROM sessions WHERE id=?').get(body.session_id) : db.prepare("SELECT id FROM sessions WHERE status='active' ORDER BY id DESC LIMIT 1").get(); if (!session) return res.status(400).json({ error: 'Create or select a session first.' });
-  if (!body.pilot_id || !body.scenario_id) return res.status(400).json({ error: 'Pilot and scenario are required.' });
+  if (!body.scenario_id) return res.status(400).json({ error: 'Scenario is required.' });
   const scenario = db.prepare('SELECT s.*, r.w_group FROM scenarios s JOIN rounds r ON r.id=s.round_id WHERE s.id=?').get(body.scenario_id); if (!scenario) return res.status(400).json({ error: 'Scenario not found.' });
-  const uavId = `UAV-${String(body.pilot_id).replace(/^PILOT-/, '')}`; const created = []; const insert = db.prepare(`INSERT INTO flights(flight_id,session_id,round_id,scenario_id,pilot_id,uav_id,battery_id,fl,mode,weather,rep,status,notes,operator,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
-  const tx = db.transaction(() => { for (const mode of ['CALM','DYN']) for (let i=1;i<=4;i++) { const rep=`REP-${String(i).padStart(2,'0')}`; const pendingId=`PENDING-${crypto.randomUUID()}`; const result=insert.run(pendingId,session.id,scenario.round_id,body.scenario_id,body.pilot_id,uavId,'','',mode,normalizeWeather(scenario.w_group),rep,'planned',body.notes||'',body.operator||'',now(),now()); created.push({id:result.lastInsertRowid,mode,rep}); } });
-  tx(); emitEvent(null, 'flight_series_created', `${created.length} pending flights`); res.json({ ids: created.map(x=>x.id), count: created.length });
+  const pilotIds=[...new Set(body.pilot_ids|| (body.pilot_id?[body.pilot_id]:[]))].filter(id=>db.prepare('SELECT 1 FROM session_participants WHERE session_id=? AND pilot_id=?').get(session.id,id)); if (!pilotIds.length) return res.status(400).json({ error: 'Select at least one participating pilot in Planning.' });
+  const created=[]; const insert=db.prepare(`INSERT INTO flights(flight_id,session_id,round_id,scenario_id,pilot_id,uav_id,battery_id,fl,mode,weather,rep,status,notes,operator,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+  const tx=db.transaction(()=>{pilotIds.forEach(pilotId=>{const uavId=`UAV-${String(pilotId).replace(/^PILOT-/,'')}`; for(const mode of ['CALM','DYN'])for(let i=1;i<=4;i++){const rep=`REP-${String(i).padStart(2,'0')}`;const result=insert.run(`PENDING-${crypto.randomUUID()}`,session.id,scenario.round_id,body.scenario_id,pilotId,uavId,'','',mode,normalizeWeather(scenario.w_group),rep,'planned',body.notes||'',body.operator||'',now(),now());created.push(result.lastInsertRowid);}})}); tx(); emitEvent(null,'flight_series_created',`${created.length} pending flights`); res.json({ids:created,count:created.length});
 });
 app.patch('/api/flights/:id', (req, res) => {
   const allowed = ['pilot_id','uav_id','battery_id','fl','mode','weather','rep','status','result','notes','operator','claimed_by','round_id','scenario_id'];
