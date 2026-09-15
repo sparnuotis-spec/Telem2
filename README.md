@@ -9,7 +9,11 @@ npm install
 npm start
 ```
 
-The app listens on `0.0.0.0:5050`. On the host open `http://localhost:5050`. From another laptop or phone on the same network open `http://<host-lan-ip>:5050`. The host computer must allow inbound TCP traffic on port 5050 in its firewall. ## Operating flow
+The app listens on `0.0.0.0:5050`. On the host open `http://localhost:5050`. From another laptop or phone on the same network open `http://<host-lan-ip>:5050`. The host computer must allow inbound TCP traffic on port 5050 in its firewall.
+
+The local database and uploaded files are stored under `data/`, which is ignored by Git. Set `TELEM2_DATA_DIR` to move them to a larger disk. Set `PORT` to change the port.
+
+## Operating flow
 
 1. Open **Setup**, create the date/session, and enter optional session notes.
 2. Add pilots with their permanent IDs and names. Pilot IDs cannot be reassigned to another name. Each pilot gets a required `sd card` or `regular` tag; `sd card` is intentionally rendered red and `regular` uses the neutral style.
@@ -53,3 +57,28 @@ curl http://localhost:5050/api/health
 ## Data safety
 
 Do not commit `data/`, Google credentials, real telemetry, or real video files. Raw files should remain original; the app stores checksums and links each file to a single Flight ID.
+
+## Regular-pilot Betaflight mass-storage helper
+
+For regular pilots, connect the flight controller to the transfer computer with a USB data cable. The Windows helper at `tools/betaflight-mass-storage.ps1` watches for a new serial port, verifies that the device identifies as Betaflight, and then sends the CLI sequence automatically.
+
+Run PowerShell from the Telem2 folder:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\tools\betaflight-mass-storage.ps1
+```
+
+For a safer one-device/manual test, specify the COM port:
+
+```powershell
+.\tools\betaflight-mass-storage.ps1 -Port COM4
+```
+
+The Betaflight command used for mass-storage mode is:
+
+```text
+msc
+```
+
+The helper enters the CLI with `#`, sends `version`, and sends `msc` only if the response contains `Betaflight`. The official Betaflight documentation states that `msc` reboots supported F4, G4, F7, and H7 flight controllers into USB mass-storage mode; normal flight-controller operation stops until power-cycled. This is a firmware reboot command, not a flight command, so disconnect propellers and do not use it while armed or flying.
