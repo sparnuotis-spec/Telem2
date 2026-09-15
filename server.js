@@ -125,6 +125,7 @@ const upload = multer({
 const now = () => new Date().toISOString();
 const broadcast = () => clients.forEach(res => { try { res.write(`data: ${JSON.stringify({ type: 'refresh', at: now() })}\n\n`); } catch (_) {} });
 const clients = new Set();
+const uploadLocks = new Set();
 const emitEvent = (flightId, type, details = '') => {
   db.prepare('INSERT INTO events (flight_id,event_type,details,created_at) VALUES (?,?,?,?)').run(flightId || null, type, details, now());
   broadcast();
@@ -252,16 +253,16 @@ app.post('/api/sd-transfer/:pilot/confirm', (req, res) => {
   for(const f of flights){const kinds=db.prepare('SELECT DISTINCT kind FROM files WHERE flight_id=?').all(f.flight_id).map(x=>x.kind);if(!kinds.includes('telemetry')||!kinds.includes('goggles'))return res.status(400).json({error:'Upload all eight files before confirming.'});}
   const assigned=[];const tx=db.transaction(()=>{for(const f of flights){const id=nextFlightId();const result=db.prepare(`INSERT INTO flights(flight_id,session_id,round_id,scenario_id,pilot_id,uav_id,battery_id,fl,mode,weather,rep,status,result,notes,operator,claimed_by,sd_transfer_ack,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(id,f.session_id,f.round_id,f.scenario_id,f.pilot_id,f.uav_id,f.battery_id,f.fl,f.mode,f.weather,f.rep,f.status,f.result,f.notes,f.operator,f.claimed_by,1,f.created_at,now());const files=db.prepare('SELECT * FROM files WHERE flight_id=?').all(f.flight_id);for(const file of files){const ext=path.extname(file.original_name).toLowerCase();const session=db.prepare('SELECT session_no FROM sessions WHERE id=?').get(f.session_id);const folder=String(session?.session_no||f.session_id).replace(/[^a-zA-Z0-9_-]/g,'_');const finalPath=path.join(UPLOAD_DIR,folder,file.kind==='goggles'?'goggles':'blackbox',`${id}${ext}`);fs.mkdirSync(path.dirname(finalPath),{recursive:true});if(fs.existsSync(file.stored_path))fs.renameSync(file.stored_path,finalPath);db.prepare('UPDATE files SET flight_id=?,stored_path=? WHERE id=?').run(id,finalPath,file.id);}db.prepare('UPDATE events SET flight_id=? WHERE flight_id=?').run(id,f.flight_id);db.prepare('DELETE FROM flights WHERE id=?').run(f.id);assigned.push(id);}});tx();broadcast();res.json({ok:true,flight_ids:assigned});
 });
-app.post('/api/flights/:id/files', upload.array('files', 10), (req, res) => {
+app.post('/api/flights/:id/files', upload.array('files', 10), async (req, res) => {
   const flight = db.prepare('SELECT * FROM flights WHERE id=?').get(req.params.id); if (!flight) return res.status(404).json({ error: 'Flight not found.' });
   const pilot=db.prepare('SELECT tag FROM pilots WHERE pilot_id=?').get(flight.pilot_id); const completedCount=db.prepare("SELECT COUNT(*) AS n FROM flights WHERE session_id=? AND pilot_id=? AND status='completed' AND result IN ('success','needs_sd_transfer')").get(flight.session_id,flight.pilot_id).n; const batchSize=pilot?.tag==='sd card'?4:2; if (pilot && completedCount < batchSize) return res.status(400).json({ error: `${pilot.tag==='sd card'?'SD-card':'Regular'} files unlock after this pilot completes ${batchSize} flights.` });
-  const requestedKind = req.body.kind || 'telemetry'; const kind = requestedKind === 'goggles' ? 'goggles' : 'telemetry'; const folderName = kind === 'goggles' ? 'goggles' : 'blackbox'; const destination = path.join(UPLOAD_DIR, flight.flight_id, folderName); fs.mkdirSync(destination, { recursive: true });
+  const requestedKind = req.body.kind || 'telemetry'; const kind = requestedKind === 'goggles' ? 'goggles' : 'telemetry'; const lockKey = `${flight.flight_id}:${kind}`; if (uploadLocks.has(lockKey) || db.prepare('SELECT 1 FROM files WHERE flight_id=? AND kind=? LIMIT 1').get(flight.flight_id, kind)) { (req.files||[]).forEach(file=>fs.rmSync(file.path,{force:true})); return res.status(409).json({ error: 'This upload slot is already occupied or uploading.' }); } uploadLocks.add(lockKey); try { const folderName = kind === 'goggles' ? 'goggles' : 'blackbox'; const session=db.prepare('SELECT session_no FROM sessions WHERE id=?').get(flight.session_id); const sessionFolder=String(session?.session_no||flight.session_id).replace(/[^a-zA-Z0-9_-]/g,'_'); const destination = path.join(UPLOAD_DIR, sessionFolder, folderName); fs.mkdirSync(destination, { recursive: true });
   const allowed = kind === 'goggles' ? ['.mp4'] : ['.bbl','.bfl'];
   for (const file of req.files || []) { const ext = path.extname(file.originalname).toLowerCase(); if (!allowed.includes(ext)) { fs.rmSync(file.path, { force: true }); return res.status(400).json({ error: `Invalid ${kind} file. Allowed: ${allowed.join(', ')}` }); } }
   const saved = [];
   for (const file of req.files || []) {
     const finalPath = path.join(destination, `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`); fs.renameSync(file.path, finalPath);
-    const hash = crypto.createHash('sha256').update(fs.readFileSync(finalPath)).digest('hex');
+    const hash = crypto.createHash('sha256').update(await fs.promises.readFile(finalPath)).digest('hex');
     const r = db.prepare('INSERT INTO files(flight_id,kind,original_name,stored_path,size,sha256,created_at) VALUES (?,?,?,?,?,?,?)').run(flight.flight_id, kind, file.originalname, finalPath, file.size, hash, now()); saved.push({ id: r.lastInsertRowid, original_name: file.originalname, size: file.size, sha256: hash });
   }
   let assignedFlightId = flight.flight_id; let assignedFlightDbId = flight.id; const kinds = db.prepare('SELECT DISTINCT kind FROM files WHERE flight_id=?').all(flight.flight_id).map(x => x.kind);
@@ -277,7 +278,7 @@ app.post('/api/flights/:id/files', upload.array('files', 10), (req, res) => {
     for (const stored of completedFiles) { const folder = stored.kind === 'goggles' ? 'goggles' : 'blackbox'; const ext = path.extname(stored.original_name).toLowerCase(); const sess = db.prepare('SELECT session_no FROM sessions WHERE id=(SELECT session_id FROM flights WHERE id=?)').get(assignedFlightDbId); const sessionFolder = String(sess?.session_no||flight.session_id).replace(/[^a-zA-Z0-9_-]/g,'_'); const finalPath = path.join(UPLOAD_DIR, sessionFolder, folder, `${stem}${ext}`); fs.mkdirSync(path.dirname(finalPath), { recursive: true }); if (fs.existsSync(stored.stored_path)) fs.renameSync(stored.stored_path, finalPath); db.prepare('UPDATE files SET stored_path=? WHERE id=?').run(finalPath, stored.id); }
     fs.rmSync(oldRoot, { recursive: true, force: true });
   }
-  emitEvent(assignedFlightId, 'files_uploaded', `${saved.length} ${kind} file(s)`); res.json({ files: saved, flight_id: assignedFlightId, flight_db_id: assignedFlightDbId, assigned: assignedFlightId !== flight.flight_id });
+  emitEvent(assignedFlightId, 'files_uploaded', `${saved.length} ${kind} file(s)`); res.json({ files: saved, flight_id: assignedFlightId, flight_db_id: assignedFlightDbId, assigned: assignedFlightId !== flight.flight_id }); } catch (err) { (req.files||[]).forEach(file=>fs.rmSync(file.path,{force:true})); res.status(500).json({ error: err.message || 'Upload failed.' }); } finally { uploadLocks.delete(lockKey); }
 });
 app.get('/api/files/:id', (req, res) => { const f = db.prepare('SELECT * FROM files WHERE id=?').get(req.params.id); if (!f || !fs.existsSync(f.stored_path)) return res.status(404).end(); res.download(f.stored_path, f.original_name); });
 
