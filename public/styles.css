@@ -53,4 +53,3 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%;overflow-x:hidden}body{
 
 .drone-status-list{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;justify-content:flex-end}.drone-status-list .drone-status{min-width:210px}@media(max-width:650px){.drone-status-list{display:block}.drone-status-list .drone-status{margin-bottom:8px}}
 
-.live-drone-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-left:auto;margin-right:18px}.live-drone-wrap>#liveDroneStatus{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}.live-drone-wrap .drone-status{min-width:190px}.live-drone-wrap .drone-status small{max-width:240px}@media(max-width:800px){.live-drone-wrap{align-items:stretch;margin:12px 0 0;width:100%}.live-drone-wrap>#liveDroneStatus{display:block}.live-drone-wrap .drone-status{margin-bottom:7px}}
