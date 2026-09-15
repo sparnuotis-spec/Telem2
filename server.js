@@ -231,7 +231,10 @@ app.delete('/api/session/:id', (req, res) => {
 });
 
 app.post('/api/pilots', (req, res) => {
-  const { pilot_id, name, tag } = req.body || {}; if (!pilot_id || !name || !['sd card','regular'].includes(tag)) return res.status(400).json({ error: 'Pilot ID, name, and tag are required.' });
+  const pilot_id = String(req.body?.pilot_id || '').trim().toUpperCase();
+  const name = String(req.body?.name || '').trim();
+  const tag = String(req.body?.tag || '').trim().toLowerCase();
+  if (!pilot_id || !name || !['sd card','regular'].includes(tag)) return res.status(400).json({ error: 'Pilot ID, name, and tag are required.' });
   const existing = db.prepare('SELECT * FROM pilots WHERE pilot_id=?').get(pilot_id);
   if (existing && existing.name !== name) return res.status(409).json({ error: 'Pilot IDs are immutable and already belong to another name.' });
   const t = now();
