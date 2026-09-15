@@ -18,13 +18,14 @@
       <nav>
         <button class="nav-link session-nav" data-view="live"><span>◉</span> LiveView</button>
         <button class="nav-link session-nav" data-view="takeoff"><span>↑</span> Takeoff</button>
-        <button class="nav-link session-nav" data-view="pending"><span>↯</span> Pending flights</button>
-        <button class="nav-link session-nav setup-nav" data-view="setup"><span>⚙</span> Setup</button>
-        <button class="nav-link session-nav" data-view="planning"><span>▦</span> Planning</button>
-        <button class="nav-link session-nav" data-view="history"><span>⌁</span> History</button>
-        <button class="nav-link session-nav" data-view="remove"><span>×</span> Remove flights</button>
-        <button class="nav-link session-nav" data-view="audit"><span>≋</span> Audit log</button>
-        <button class="nav-link admin-nav" data-view="admin"><span>▤</span> Admin</button>
+        <button class="nav-link mobile-advanced-toggle" id="mobileAdvancedToggle" type="button"><span>＋</span> Advanced</button>
+        <button class="nav-link session-nav mobile-advanced-nav" data-view="pending"><span>↯</span> Pending flights</button>
+        <button class="nav-link session-nav setup-nav mobile-advanced-nav" data-view="setup"><span>⚙</span> Setup</button>
+        <button class="nav-link session-nav mobile-advanced-nav" data-view="planning"><span>▦</span> Planning</button>
+        <button class="nav-link session-nav mobile-advanced-nav" data-view="history"><span>⌁</span> History</button>
+        <button class="nav-link session-nav mobile-advanced-nav" data-view="remove"><span>×</span> Remove flights</button>
+        <button class="nav-link session-nav mobile-advanced-nav" data-view="audit"><span>≋</span> Audit log</button>
+        <button class="nav-link admin-nav mobile-advanced-nav" data-view="admin"><span>▤</span> Admin</button>
       </nav>
       <div class="session-timer-sidebar" id="sessionTimerBar"></div><div class="qr-connect"><div class="mini-label">SCAN TO CONNECT</div><img src="/api/qr.png" alt="QR code to open Telem2 on this network"><small>Scan with your phone camera</small></div><div class="connected-users" id="connectedUsers"><div class="mini-label">CONNECTED USERS</div><div class="connected-users-list"></div></div><div class="sidebar-foot"><div class="mini-label">OPEN ON THIS NETWORK</div><div class="host-address" id="hostAddress">Loading address…</div><p>Use this address on another PC, Android, or iPhone connected to the same Wi‑Fi.</p></div>
     </aside>
