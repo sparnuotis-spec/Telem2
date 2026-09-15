@@ -69,6 +69,14 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\tools\betaflight-mass-storage.ps1
 ```
 
+If the watcher is running on a second laptop, point its status reports at the host Telem2 server:
+
+```powershell
+.\tools\betaflight-mass-storage.ps1 -Telem2Url http://192.168.1.25:5050
+```
+
+Replace `192.168.1.25` with the host PC address. The browser dashboard will show the USB computer, COM port, and whether Betaflight was verified or mass-storage mode was reached.
+
 For a safer one-device/manual test, specify the COM port:
 
 ```powershell
