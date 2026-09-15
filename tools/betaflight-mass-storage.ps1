@@ -23,6 +23,7 @@ function Get-SerialPorts {
 }
 
 function Send-MassStorageCommand([string]$TargetPort) {
+    $beforeVolumes = @(Get-Volume | Where-Object { $_.DriveType -eq 'Removable' -and $_.DriveLetter } | ForEach-Object { [string]$_.DriveLetter })
     Write-Log "Opening $TargetPort at 115200 baud."
     Report-Status 'connecting' $TargetPort 'Checking Betaflight firmware'
     $serial = New-Object System.IO.Ports.SerialPort $TargetPort,115200,None,8,one
@@ -47,6 +48,7 @@ function Send-MassStorageCommand([string]$TargetPort) {
         Report-Status 'verified' $TargetPort 'Betaflight verified; switching to mass storage'
         Write-Log "Verified Betaflight on $TargetPort and sent '#', 'version', then 'msc'."
         Report-Status 'mass_storage' $TargetPort 'Flight controller rebooted into mass-storage mode'
+        if ($massStorageDevices) { $massStorageBaselines[$TargetPort] = $beforeVolumes; $massStorageDevices[$TargetPort] = @() }
         Write-Log 'The FC should now appear as a USB mass-storage drive. Power-cycle it after transfer.'
     }
     finally {
@@ -61,12 +63,34 @@ if ($Port) {
 }
 
 $known = @(Get-SerialPorts)
+$massStorageDevices = @{}
+$massStorageBaselines = @{}
 Write-Log "Watching for a newly connected Betaflight USB serial port. Press Ctrl+C to stop."
 if ($known.Count) { Write-Log "Currently present: $($known -join ', ')" }
 
 while ($true) {
     Start-Sleep -Seconds ([Math]::Max(1,$PollSeconds))
     $current = @(Get-SerialPorts)
+    foreach ($devicePort in @($massStorageDevices.Keys)) {
+        $currentVolumes = @(Get-Volume | Where-Object { $_.DriveType -eq 'Removable' -and $_.DriveLetter } | ForEach-Object { [string]$_.DriveLetter })
+        $knownVolumes = @($massStorageDevices[$devicePort])
+        if ($knownVolumes.Count -eq 0) {
+            $baseline = @($massStorageBaselines[$devicePort])
+            $newVolumes = @($currentVolumes | Where-Object { $baseline -notcontains $_ })
+            if ($newVolumes.Count -gt 0) {
+                $massStorageDevices[$devicePort] = $newVolumes
+                Write-Log "Mass-storage drive assigned to ${devicePort}: $($newVolumes -join ', ')"
+            }
+            continue
+        }
+        $removedVolumes = @($knownVolumes | Where-Object { $currentVolumes -notcontains $_ })
+        if ($removedVolumes.Count -gt 0) {
+            Report-Status 'disconnected' $devicePort 'Mass-storage drive disconnected'
+            Write-Log "Mass-storage drive disconnected for $devicePort."
+            $massStorageDevices.Remove($devicePort)
+            $massStorageBaselines.Remove($devicePort)
+        }
+    }
     $newPorts = @($current | Where-Object { $known -notcontains $_ })
     foreach ($newPort in $newPorts) {
         Write-Log "New serial port detected: $newPort"
