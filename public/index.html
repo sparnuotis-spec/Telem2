@@ -47,7 +47,7 @@
   </div>
   <div id="offlineOverlay" class="offline-overlay"><div class="offline-card"><div class="offline-icon">!</div><h2>Disconnected</h2><p>Telem2 is disconnected from the host. The dashboard is locked until the connection is restored.</p><span>Reconnecting automatically…</span></div></div>
   <div id="successExit" class="success-exit hidden"><div><strong>Successful, exiting</strong><span>Flight saved successfully</span></div></div>
-  <div id="takeoffBatteryModal" class="takeoff-modal hidden"><div class="takeoff-modal-card"><div class="eyebrow">TAKEOFF CHECK</div><h2>Enter battery number</h2><p id="takeoffBatteryFlight"></p><input id="takeoffBatteryInput" placeholder="Battery number" inputmode="numeric" autocomplete="off"><div class="takeoff-modal-actions"><button class="ghost" data-action="cancel-takeoff">Cancel</button><button class="takeoff-button" data-action="confirm-takeoff">Took off</button></div></div></div>
+  <div id="takeoffBatteryModal" class="takeoff-modal hidden"><div class="takeoff-modal-card"><div class="eyebrow">TAKEOFF CHECK</div><h2>Enter battery number</h2><p id="takeoffBatteryFlight"></p><div id="takeoffBatteryLast" class="takeoff-battery-last">Last used battery: Not recorded</div><input id="takeoffBatteryInput" placeholder="Battery number" inputmode="numeric" autocomplete="off"><div class="takeoff-modal-actions"><button class="ghost" data-action="cancel-takeoff">Cancel</button><button class="takeoff-button" data-action="confirm-takeoff">Took off</button></div></div></div>
   <script src="/app.js"></script>
 </body>
 </html>
