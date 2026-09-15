@@ -69,6 +69,7 @@ if ($Port) {
 $known = @(Get-SerialPorts)
 $massStorageDevices = @{}
 $reconnectInProgress = @{}
+$retryAfter = @{}
 $absentPorts = @{}
 Write-Log "Watching for a newly connected Betaflight USB serial port. Press Ctrl+C to stop."
 if ($known.Count) { Write-Log "Currently present: $($known -join ', ')" }
@@ -92,7 +93,8 @@ while ($true) {
     $removedPorts = @($known | Where-Object { $current -notcontains $_ })
     foreach ($removedPort in $removedPorts) { $absentPorts[$removedPort] = $true; if (-not $massStorageDevices.ContainsKey($removedPort)) { Report-Status 'disconnected' $removedPort 'Flight controller disconnected' } }
     $newPorts = @($current | Where-Object { $known -notcontains $_ })
-    $reconnectedPorts = @($current | Where-Object { $massStorageDevices.ContainsKey($_) -and $absentPorts.ContainsKey($_) -and -not $reconnectInProgress.ContainsKey($_) })
+    $now = [DateTime]::UtcNow
+    $reconnectedPorts = @($current | Where-Object { $massStorageDevices.ContainsKey($_) -and $absentPorts.ContainsKey($_) -and (-not $retryAfter.ContainsKey($_) -or $retryAfter[$_] -le $now) })
     foreach ($portToProcess in @($newPorts + $reconnectedPorts | Select-Object -Unique)) {
         if ($reconnectedPorts -contains $portToProcess) { $reconnectInProgress[$portToProcess] = $true; $absentPorts.Remove($portToProcess); Write-Log "Previously handled port reconnected: $portToProcess" }
         else { Write-Log "New serial port detected: $portToProcess" }
@@ -102,9 +104,12 @@ while ($true) {
         catch {
             Write-Warning "$logPrefix Could not send the command to ${portToProcess}: $($_.Exception.Message)"
             Report-Status 'error' $portToProcess $_.Exception.Message
+            $reconnectInProgress.Remove($portToProcess)
+            $absentPorts[$portToProcess] = $true
+            $retryAfter[$portToProcess] = [DateTime]::UtcNow.AddSeconds(3)
         }
         if ($Once) { exit 0 }
     }
-    foreach ($port in @($reconnectInProgress.Keys)) { if ($current -notcontains $port) { $reconnectInProgress.Remove($port) } }
+    foreach ($port in @($reconnectInProgress.Keys)) { if ($current -notcontains $port) { $reconnectInProgress.Remove($port); $retryAfter.Remove($port) } }
     $known = $current
 }
