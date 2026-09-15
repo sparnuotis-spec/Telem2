@@ -9,18 +9,7 @@ npm install
 npm start
 ```
 
-The app listens on `0.0.0.0:5050`. On the host open `http://localhost:5050`. From another laptop or phone on the same network open `http://<host-lan-ip>:5050`. The host computer must allow inbound TCP traffic on port 5050 in its firewall. The QR-code connection panel requires the dependencies from `package-lock.json`; after pulling updates on Windows, run `npm install` once before `npm start`. If `qrcode` is missing, run:
-
-```powershell
-npm install
-npm start
-```
-
-If `node_modules` is stale, close Telem2, remove the `node_modules` folder, then run `npm install` again. Do not delete `package-lock.json`.
-
-The local database and uploaded files are stored under `data/`, which is ignored by Git. Set `TELEM2_DATA_DIR` to move them to a larger disk. Set `PORT` to change the port.
-
-## Operating flow
+The app listens on `0.0.0.0:5050`. On the host open `http://localhost:5050`. From another laptop or phone on the same network open `http://<host-lan-ip>:5050`. The host computer must allow inbound TCP traffic on port 5050 in its firewall. ## Operating flow
 
 1. Open **Setup**, create the date/session, and enter optional session notes.
 2. Add pilots with their permanent IDs and names. Pilot IDs cannot be reassigned to another name. Each pilot gets a required `sd card` or `regular` tag; `sd card` is intentionally rendered red and `regular` uses the neutral style.

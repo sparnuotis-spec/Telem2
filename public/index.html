@@ -27,7 +27,7 @@
         <button class="nav-link session-nav mobile-advanced-nav" data-view="audit"><span>≋</span> Audit log</button>
         <button class="nav-link admin-nav mobile-advanced-nav" data-view="admin"><span>▤</span> Admin</button>
       </nav>
-      <div class="session-timer-sidebar" id="sessionTimerBar"></div><div class="connected-users" id="connectedUsers"><div class="mini-label">CONNECTED USERS</div><div class="connected-users-list"></div></div><div class="sidebar-foot"><div class="mini-label">OPEN ON THIS NETWORK</div><div class="host-address" id="hostAddress">Loading address…</div><button class="connect-phone-button" data-action="show-qr" type="button">▣ Connect phone</button><p>Use the QR code on another PC, Android, or iPhone.</p></div>
+      <div class="session-timer-sidebar" id="sessionTimerBar"></div><div class="connected-users" id="connectedUsers"><div class="mini-label">CONNECTED USERS</div><div class="connected-users-list"></div></div><div class="sidebar-foot"><div class="mini-label">OPEN ON THIS NETWORK</div><div class="host-address" id="hostAddress">Loading address…</div><p>Use the QR code on another PC, Android, or iPhone.</p></div>
     </aside>
     <main class="main">
       <header class="topbar"><div><div class="eyebrow" id="eyebrow">OPERATIONS CENTER</div><h1 id="pageTitle">Sessions</h1></div><div class="top-actions"><button class="ghost hidden" id="backSessions">← Sessions</button><button class="ghost" id="syncBtn">↥ Sync snapshot</button><a class="primary" href="/api/export.csv">↓ Export CSV</a></div></header>
@@ -48,7 +48,6 @@
   <div id="offlineOverlay" class="offline-overlay"><div class="offline-card"><div class="offline-icon">!</div><h2>Disconnected</h2><p>Telem2 is disconnected from the host. The dashboard is locked until the connection is restored.</p><span>Reconnecting automatically…</span></div></div>
   <div id="successExit" class="success-exit hidden"><div><strong>Successful, exiting</strong><span>Flight saved successfully</span></div></div>
   <div id="takeoffBatteryModal" class="takeoff-modal hidden"><div class="takeoff-modal-card"><div class="eyebrow">TAKEOFF CHECK</div><h2>Enter battery number</h2><p id="takeoffBatteryFlight"></p><input id="takeoffBatteryInput" placeholder="Battery number" inputmode="numeric" autocomplete="off"><div class="takeoff-modal-actions"><button class="ghost" data-action="cancel-takeoff">Cancel</button><button class="takeoff-button" data-action="confirm-takeoff">Took off</button></div></div></div>
-  <div id="qrModal" class="qr-modal hidden"><div class="qr-modal-card"><button class="qr-close" data-action="close-qr" type="button" aria-label="Close">×</button><div class="eyebrow">CONNECT PHONE</div><h2>Scan to open Telem2</h2><img src="/api/qr.png" alt="QR code to open Telem2 on this network"><strong id="qrLink">Loading address…</strong><p>Connect the phone to the same Wi‑Fi, then scan this code with its camera.</p></div></div>
   <script src="/app.js"></script>
 </body>
 </html>
